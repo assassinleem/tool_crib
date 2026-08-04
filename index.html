@@ -1,1 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tool Crib</title>
+<style>
+  :root {
+    --bg:        #121214;
+    --surface:   #1b1b1f;
+    --surface-2: #232329;
+    --border:    #2e2e35;
+    --text:      #e8e6e3;
+    --text-2:    #a3a09b;
+    --accent:    #b91c2e;
+    --accent-hi: #e6394f;
+    --low:       #ff5d5d;
+    --warn:      #d99a2b;
+    --ok:        #3fae6a;
+  }
 
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { height: 100%; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  .mono {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ---- Layout: left rail on desktop, bottom bar on phone ---- */
+
+  .app {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    height: 100%;
+  }
+
+  .rail {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 12px 0;
+  }
+
+  .rail-title {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 6px 16px 14px;
+  }
+
+  .rail-title .crib { color: var(--accent-hi); }
+
+  .nav { display: flex; flex-direction: column; }
+
+  .nav-btn {
+    display: block;
+    text-align: left;
+    padding: 10px 16px;
+    color: var(--text-2);
+    border-left: 3px solid transparent;
+    transition: background 120ms, color 120ms;
+  }
+
+  .nav-btn:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .nav-btn[aria-current="page"] {
+    color: var(--text);
+    border-left-color: var(--accent);
+    background: var(--surface-2);
+    font-weight: 600;
+  }
+
+  main {
+    overflow-y: auto;
+    padding: 20px 24px;
+  }
+
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  .screen h1 {
+    font-size: 19px;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+
+  .empty-state {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--text-2);
+  }
+
+  @media (max-width: 720px) {
+    .app { grid-template-columns: 1fr; }
+
+    .rail {
+      /* rail becomes a fixed bottom bar */
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      z-index: 10;
+      flex-direction: row;
+      align-items: stretch;
+      padding: 0;
+      border-right: none;
+      border-top: 1px solid var(--border);
+    }
+
+    .rail-title { display: none; }
+
+    .nav {
+      flex-direction: row;
+      width: 100%;
+    }
+
+    .nav-btn {
+      flex: 1;
+      text-align: center;
+      padding: 12px 4px;
+      font-size: 13px;
+      border-left: none;
+      border-top: 3px solid transparent;
+    }
+
+    .nav-btn[aria-current="page"] { border-top-color: var(--accent); }
+
+    main { padding-bottom: 64px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="rail">
+    <div class="rail-title">Tool <span class="crib">Crib</span></div>
+    <nav class="nav" aria-label="Main">
+      <button class="nav-btn" data-screen="crib">Crib</button>
+      <button class="nav-btn" data-screen="add">Add Tools</button>
+      <button class="nav-btn" data-screen="tagout">Tag-Out</button>
+      <button class="nav-btn" data-screen="ordering">Needs Ordering</button>
+      <button class="nav-btn" data-screen="log">Log</button>
+    </nav>
+  </div>
+
+  <main>
+    <section class="screen" id="screen-crib">
+      <h1>Crib</h1>
+      <div class="empty-state">No items yet.</div>
+    </section>
+
+    <section class="screen" id="screen-add">
+      <h1>Add Tools</h1>
+      <div class="empty-state">Survey mode coming in a later step.</div>
+    </section>
+
+    <section class="screen" id="screen-tagout">
+      <h1>Tag-Out</h1>
+      <div class="empty-state">No open tickets.</div>
+    </section>
+
+    <section class="screen" id="screen-ordering">
+      <h1>Needs Ordering</h1>
+      <div class="empty-state">Nothing needs ordering.</div>
+    </section>
+
+    <section class="screen" id="screen-log">
+      <h1>Log</h1>
+      <div class="empty-state">No log events.</div>
+    </section>
+  </main>
+</div>
+
+<script>
+"use strict";
+
+const SCREENS = ["crib", "add", "tagout", "ordering", "log"];
+const DEFAULT_SCREEN = "crib";
+
+function showScreen(name) {
+  if (!SCREENS.includes(name)) name = DEFAULT_SCREEN;
+  for (const s of SCREENS) {
+    document.getElementById("screen-" + s)
+      .classList.toggle("active", s === name);
+  }
+  for (const btn of document.querySelectorAll(".nav-btn")) {
+    if (btn.dataset.screen === name) {
+      btn.setAttribute("aria-current", "page");
+    } else {
+      btn.removeAttribute("aria-current");
+    }
+  }
+}
+
+// The hash is the router: #crib, #add, ... so refresh and back/forward
+// keep your place, and the app still works from a file:// URL.
+function screenFromHash() {
+  return location.hash.replace("#", "") || DEFAULT_SCREEN;
+}
+
+for (const btn of document.querySelectorAll(".nav-btn")) {
+  btn.addEventListener("click", () => {
+    location.hash = btn.dataset.screen;
+  });
+}
+
+window.addEventListener("hashchange", () => showScreen(screenFromHash()));
+
+showScreen(screenFromHash());
+</script>
+
+</body>
+</html>
