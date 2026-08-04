@@ -87,7 +87,8 @@ tool-crib-data/       private repo, personal account
   "description": "1/2 4FL carbide endmill",
   "substrate": "carbide",
   "fields": { "dia": 0.5, "dia_display": "1/2", "flutes": 4, "loc": 1.25,
-              "corner_rad": 0, "coating": "AlTiN" },
+              "corner_rad": 0, "oal": 3.0, "shank_dia": 0.5,
+              "coating": "AlTiN" },
   "mfr_part_number": "",
   "vendor": "",
   "order_url": "",
@@ -113,6 +114,30 @@ tool-crib-data/       private repo, personal account
 - `location` stays null in v1. Field exists so v2 needs no migration.
 - `min_qty` only means anything when `consumable` is true. Durable items never
   appear on Needs Ordering.
+
+#### Field modes
+
+Every field in a type's resolved schema declares a `mode`:
+
+- `input` — user types it; renders in the entry form, in schema-declared
+  tab order
+- `fixed: <value>` — implied by the type (square endmill → corner_rad 0);
+  never rendered
+- `derived: <expr>` — computed from other fields on the same record
+  (ball endmill → corner_rad `dia / 2`), or via a named lookup table
+  (center drill size # → body dia); never rendered
+
+**The resolved value is always stored on the record** regardless of mode, so
+search/sort/filter treat every record uniformly — a search for .250 radius
+finds ball endmills that never had a radius typed in. Only `input` fields
+appear in the form.
+
+Derived expressions stay trivial: one field, basic arithmetic, or a named
+lookup table (tables live in `CATEGORIES.lookups`). If an expression wants
+more than that, it should be an input.
+
+Required at entry: `id`, `family`, `type` — nothing else. Every other field
+is skippable.
 
 ### 2.2 Tag-out ticket — tagouts/<ID>.json
 
@@ -161,21 +186,64 @@ tickets.
 
 ---
 
-## 3. Families and types (categories.json)
+## 3. Families and types (categories.js)
 
-Structure per family: prefix, label, decal (inline SVG id), consumable default,
-substrate rule, field list with types/units/order, description template.
+Structure per family: prefix, label, decals (inline SVG ids), consumable
+default, min_qty default, core field list in tab order, per-type
+overrides/drops/adds, description template. Every field carries a mode
+(§2.1 Field modes). Substrate is a regular field with `context_strip: true` —
+it renders in the sticky context strip, not the field row; fixed-mode
+substrate shows as a quiet note.
 
-| Family | Prefix | Types | Substrate | Consumable | Key fields (in tab order) |
-|---|---|---|---|---|---|
-| Endmills | EM | square, ball, corner rad, chamfer, corner rounding, thread mill, rougher | hidden, default carbide | yes | dia, flutes, LOC, corner_rad (corner-rad type only), coating |
-| Drills | DR | twist, spot, center, countersink | **visible selector: HSS / cobalt / carbide** | yes | dia, point angle, flute length, coolant_thru (y/n) |
-| Taps | TP | form, cut, spiral flute, spiral point, pipe | visible, default HSS | yes | thread size, pitch/TPI, class, thru/blind |
-| Reamers | RM | chucking, over/under | visible, default carbide | yes | dia, tolerance (+/-), flutes |
-| Insert tooling | IT | shell mill, indexable endmill, insert drill | n/a | **no** | dia, insert designation, pocket count, arbor/shank |
-| Inserts | IN | square, round, diamond, drill-specific | grade instead of substrate | yes | ISO/mfr code, grade, corner rad |
-| Holders | HB | ER chuck, shrink fit, shell arbor, drill chuck, tap holder | n/a | **no** | interface (CAT40/BT30/…), capacity/arbor size, gage length |
-| Hardware | MS | collet, pull stud, insert screw, wrench, misc | n/a | yes | size, fits (free text) |
+Per-type resolution: start from the family core list (tab order), shallow-
+merge type overrides by key, remove dropped keys, append type adds.
+
+Required at entry: id, family, type only. Everything else skippable.
+
+| Family | Prefix | Types | Consumable | Core fields (tab order) |
+|---|---|---|---|---|
+| Endmills | EM | square, ball, corner rad, chamfer, corner rounding, thread mill, rougher | yes | dia, flutes, loc, corner_rad (per-type mode, below), oal, shank_dia, coating, substrate (fixed: carbide, hidden) |
+| Drills | DR | twist, spot, center, countersink | yes | dia, point_angle, flute_length, oal, substrate (input, visible: HSS/cobalt/carbide, default HSS), coating, coolant_thru (y/n) |
+| Taps | TP | form, cut, spiral flute, spiral point, pipe | yes | thread_size (ONE free-text field: "1/4-20", "M6x1" — not split into size+pitch), class (2B/3B select), substrate (visible, default HSS), coating, thru_or_blind |
+| Reamers | RM | chucking, over/under | yes | dia, tolerance (free text, "+.0000/-.0002" style), flutes, substrate (visible, default carbide), shank_dia |
+| Insert tooling | IT | shell mill, indexable endmill, insert drill | **no** | dia, insert_designation (free text, e.g. "SEHT1204" — identity-tier, powers v2 insert matching), pocket_count, mount (arbor size or shank dia), max_doc |
+| Inserts | IN | square, round, diamond, drill-specific | yes | designation (full ISO/mfr string), grade, nose_rad, coating, chipbreaker |
+| Holders | HB | ER chuck, shrink fit, shell arbor, drill chuck, tap holder | **no** | interface (CAT40/BT30/… select), capacity (free text: ER size / arbor dia / chuck range), gage_length, coolant (none/TSC/flange select) |
+| Hardware | MS | collet, pull stud, insert screw, wrench, misc | yes | size, fits (free text). Nothing more. |
+
+### Per-type variance
+
+**Endmills** — the corner-radius field is the canonical field-modes example:
+
+| Type | corner_rad | extra inputs |
+|---|---|---|
+| square | fixed 0 | — |
+| ball | derived dia/2 | — |
+| corner rad | input | — |
+| chamfer | fixed 0 | included_angle, tip_dia |
+| corner rounding | (none) | form_radius, pilot_dia |
+| thread mill | (none) | thread_range (free text, e.g. "1/4-20 – 1/2-13" or pitch) |
+| rougher | fixed 0 | chipbreaker_style (fine/coarse) |
+
+**Drills**
+
+| Type | changes from core |
+|---|---|
+| twist | core as-is; dia additionally accepts letter and wire-gauge sizes (below) |
+| spot | drop flute_length + coolant_thru; point_angle is the key identity field |
+| center | replace dia with size_number (#1–#7 select); body_dia derived via lookup table; drop point_angle |
+| countersink | add included_angle, body_dia, flutes; drop flute_length |
+
+**Taps** — pipe type: thread_size format is NPT-style, drop class.
+
+### Dia-like fields
+
+Every dia-like field (dia, shank_dia, tip_dia, body_dia, pilot_dia,
+form_radius, nose_rad, etc.) uses the §2.1 fractional pattern: parse `1/2`,
+`1 1/4`, `.4375`, `0.500`; store decimal for sort/math + display string.
+**Twist drills additionally accept letter (A–Z) and wire-gauge (#1–#80)
+sizes** via lookup tables in `CATEGORIES.lookups` → decimal + display
+string. One shared parse/format utility, used everywhere.
 
 - Description auto-builds from template, editable:
   endmill → `{dia_display} {flutes}FL {substrate} {type} endmill`.
