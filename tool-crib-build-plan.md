@@ -26,10 +26,15 @@ tooling, CSV export.
 ```
 tool-crib/            public repo, GitHub Pages
   index.html          entire app: HTML + CSS + JS, no build step, no framework
-  categories.json     family/type definitions + field schemas (fetched at load)
-  people.json         borrower names (fetched at load; app can append via API)
+  categories.js       family/type definitions + field schemas; pure data on
+                      window.CATEGORIES, loaded via <script src> because
+                      fetch() of a local file is blocked on file:// and
+                      script tags are not
 
 tool-crib-data/       private repo, personal account
+  people.json                 borrower names (read/written via Contents API —
+                              runtime data the app writes, and coworker names
+                              stay out of the public repo)
   items/EM-0042.json          one file per tool
   tagouts/TO-0118.json        one file per ticket
   log/2026-08/<uuid>.json     one file per count event, append-only
@@ -177,8 +182,8 @@ substrate rule, field list with types/units/order, description template.
 - HSS badge: any item with substrate `HSS` or `cobalt` gets a small amber `HSS`
   chip in every list row. This is the one substrate exception in the shop and it
   must be visible at a glance.
-- categories.json is data, not code. Adding a type or field later must require
-  zero JS changes. Lathe families ship in the file, commented out.
+- categories.js is data, not code. Adding a type or field later must require
+  zero JS changes. Lathe families ship in the file with `enabled: false`.
 
 ---
 
@@ -215,7 +220,8 @@ on desktop, bottom bar on phone widths.
 
 ### 4.3 Tag-Out
 - New ticket: person (dropdown from people.json + inline "add person", which
-  appends to people.json via API), then add lines by searching items. Durable
+  appends to people.json in the data repo via API), then add lines by
+  searching items. Durable
   items default state `out`; consumables also start `out` (they're expected to
   be consumed, but the crib guy closes them explicitly so accidental returns of
   unused endmills stay possible).
@@ -275,7 +281,7 @@ Each step ends runnable. Test with a local `data/` folder mock of the API
 
 1. **Skeleton + theme.** index.html, nav, palette, empty screens. Deploy to
    Pages immediately so the pipe works from day one.
-2. **categories.json + decals.** Full family/type data, SVG sprite, card picker
+2. **categories.js + decals.** Full family/type data, SVG sprite, card picker
    as an isolated component.
 3. **GitHub layer.** Auth prompt, tree fetch, batched reads, localStorage cache,
    write queue, 409 handling, commit messages. This is the hard 20%.
@@ -307,7 +313,7 @@ review.
 
 1. On Leem's personal GitHub: `tool-crib` (public) + `tool-crib-data` (private).
 2. Pages on `tool-crib`: main / root.
-3. `.gitkeep` in items/, tagouts/, log/.
+3. `.gitkeep` in items/, tagouts/, log/; `people.json` containing `[]`.
 4. Crib guy: GitHub account (he likely has none — walk him through signup), then
    add him as a collaborator on `tool-crib-data` with Write.
 5. Leem's token: fine-grained PAT, resource owner = his account, only
