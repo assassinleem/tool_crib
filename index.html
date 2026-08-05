@@ -196,6 +196,211 @@
   .type-card .decal { width: 30px; height: 30px; color: var(--text-2); }
   .type-card.selected .decal { color: var(--accent-hi); }
 
+  /* ---- Crib table ---- */
+
+  .crib-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  #crib-search {
+    width: 300px;
+    max-width: 100%;
+    font: inherit;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 11px;
+  }
+
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .chip {
+    padding: 4px 11px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 13px;
+    color: var(--text-2);
+    transition: background 120ms, color 120ms, border-color 120ms;
+  }
+
+  .chip:hover { background: var(--surface-2); color: var(--text); }
+
+  .chip.on {
+    border-color: var(--accent);
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .crib-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  .crib-table th {
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .crib-table th.num, .crib-table td.count-cell { text-align: right; }
+
+  .crib-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .crib-table tbody tr {
+    cursor: pointer;
+    transition: background 120ms;
+  }
+
+  .crib-table tbody tr:hover { background: var(--surface-2); }
+
+  /* Low stock: hotter red than the accent, plus a left border + bold count
+     so color is never the only signal. */
+  .crib-table tr.low td:first-child { box-shadow: inset 3px 0 var(--low); }
+  .crib-table tr.low .count-cell { color: var(--low); font-weight: 700; }
+  .crib-table tr.archived { opacity: 0.55; }
+
+  .row-decal { width: 20px; height: 20px; color: var(--text-2); display: block; }
+
+  .id-cell, .count-cell {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+    white-space: nowrap;
+  }
+
+  .count-cell input {
+    width: 56px;
+    font: inherit;
+    font-family: inherit;
+    text-align: right;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 2px 5px;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.3;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: 1px;
+  }
+
+  .badge.hss  { color: var(--warn); border: 1px solid var(--warn); }
+  .badge.low  { color: var(--low);  border: 1px solid var(--low); }
+  .badge.arch { color: var(--text-2); border: 1px solid var(--border); }
+
+  .fam-cell { color: var(--text-2); font-size: 13px; white-space: nowrap; }
+
+  /* ---- Detail drawer ---- */
+
+  .drawer {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    z-index: 30;
+    width: 460px;
+    max-width: 100vw;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    padding: 18px 20px 28px;
+    overflow-y: auto;
+    display: none;
+  }
+
+  .drawer.open { display: block; }
+
+  .drawer-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+
+  .drawer-head .decal { width: 26px; height: 26px; color: var(--text-2); flex: none; }
+
+  .drawer-head h2 {
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+    font-size: 17px;
+    flex: 1;
+  }
+
+  .drawer-close {
+    color: var(--text-2);
+    font-size: 20px;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+
+  .drawer-close:hover { background: var(--surface-2); color: var(--text); }
+
+  .drawer-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
+    margin: 16px 0 2px;
+  }
+
+  .qty-stepper { display: flex; align-items: center; gap: 6px; }
+
+  .qty-stepper button {
+    width: 34px;
+    padding: 6px 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 15px;
+    color: var(--text-2);
+  }
+
+  .qty-stepper button:hover { background: var(--surface-2); color: var(--text); }
+
+  .qty-stepper input {
+    width: 64px;
+    text-align: right;
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+
+  .tagout-lines { font-size: 13px; color: var(--text-2); }
+  .tagout-lines .tl { padding: 3px 0; }
+  .tagout-lines .tl .mono { color: var(--text); }
+
+  .drawer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  .check-field {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    color: var(--text-2);
+    padding: 8px 0;
+  }
+
+  .check-field input {
+    width: 17px; height: 17px;
+    accent-color: var(--accent);
+  }
+
   /* ---- Survey mode (Add Tools) ---- */
 
   #add-strip {
@@ -601,7 +806,19 @@
   <main>
     <section class="screen" id="screen-crib">
       <h1>Crib</h1>
+      <div class="crib-controls">
+        <input id="crib-search" autocomplete="off" spellcheck="false"
+               placeholder="Search id, description, part number…">
+        <div class="chip-row" id="crib-chips"></div>
+      </div>
       <div class="empty-state" id="crib-empty">No items yet.</div>
+      <table class="crib-table" id="crib-table" hidden>
+        <thead><tr>
+          <th>ID</th><th></th><th>Description</th>
+          <th class="num">Avail / On&nbsp;hand</th><th>Family</th><th></th>
+        </tr></thead>
+        <tbody id="crib-tbody"></tbody>
+      </table>
     </section>
 
     <section class="screen" id="screen-add">
@@ -628,6 +845,8 @@
     </section>
   </main>
 </div>
+
+<div class="drawer" id="drawer"></div>
 
 <div class="conflict-banner" id="conflict-banner"></div>
 
@@ -685,6 +904,11 @@ function showScreen(name) {
     } else {
       btn.removeAttribute("aria-current");
     }
+  }
+  // Search is the crib's front door — hands land on the keyboard, not the mouse.
+  if (name === "crib") {
+    const s = document.getElementById("crib-search");
+    if (s) s.focus();
   }
 }
 
@@ -900,13 +1124,8 @@ function ingest(cache) {
   updateChip();
 }
 
-function renderCrib() {
-  const n = Object.keys(store.items).length;
-  const el = document.getElementById("crib-empty");
-  el.textContent = n === 0
-    ? "No items yet."
-    : n + " item" + (n === 1 ? "" : "s") + " loaded — table lands in step 5.";
-}
+/* renderCrib lives in the Crib module further down (function declarations
+   hoist, so the data layer can call it freely). */
 
 /* ---- writeQueue ----
    Op shape: { id, path, content, summary, patch?, attempts, state, nextAt }
@@ -1209,7 +1428,7 @@ const survey = {
   family: null, type: null, substrate: null,
   pickerOpen: true,
   values: {},          // field key -> raw input (string, or boolean for bool)
-  id: "", idTouched: false,
+  id: "", idTouched: false, idLocked: false,
   qty: "1", minQty: "",
   desc: "", descTouched: false,
   editingPath: null,   // set while correcting a session record
@@ -1422,6 +1641,7 @@ function startNextRecord() {
   survey.minQty = String(survey.family.min_qty_default ?? 0);
   survey.id = nextId(survey.family.prefix);
   survey.idTouched = false;
+  survey.idLocked = false;
   survey.editingPath = null;
   renderSurvey();
 }
@@ -1492,6 +1712,12 @@ function renderStrip() {
   const idInput = document.createElement("input");
   idInput.value = survey.id;
   idInput.spellcheck = false;
+  // Once a record has synced its ID is the filename in the data repo;
+  // editing it here would orphan a duplicate file. Archive and re-enter.
+  idInput.disabled = survey.idLocked;
+  if (survey.idLocked) {
+    idInput.title = "ID is locked once synced — archive this record and re-enter it to fix an ID typo";
+  }
   idInput.addEventListener("input", () => {
     survey.id = idInput.value;
     survey.idTouched = true;
@@ -1511,7 +1737,7 @@ function renderForm() {
 
   for (const f of currentSchema()) {
     if (f.mode !== "input" || f.context_strip) continue;
-    row.appendChild(buildField(f));
+    row.appendChild(buildField(f, survey.values, autoDesc));
   }
 
   const row2 = document.createElement("div");
@@ -1559,7 +1785,9 @@ function simpleField(label, key, value, decorate) {
   return wrap;
 }
 
-function buildField(f) {
+/* Shared between the survey form and the crib drawer: renders one schema
+   field bound to a values bag, calling onInput after every change. */
+function buildField(f, values, onInput) {
   const wrap = document.createElement("div");
   wrap.className = "field";
   const lab = document.createElement("label");
@@ -1579,30 +1807,31 @@ function buildField(f) {
       o.value = opt; o.textContent = opt;
       control.appendChild(o);
     }
-    control.value = survey.values[f.key] ?? f.default ?? "";
-    if (control.value !== "") survey.values[f.key] = control.value;
+    control.value = values[f.key] ?? f.default ?? "";
+    if (control.value !== "") values[f.key] = control.value;
     control.addEventListener("change", () => {
-      survey.values[f.key] = control.value;
-      autoDesc();
+      values[f.key] = control.value;
+      if (onInput) onInput();
     });
   } else if (f.kind === "bool") {
     control = document.createElement("input");
     control.type = "checkbox";
-    control.checked = survey.values[f.key] === true;
+    control.checked = values[f.key] === true;
     control.addEventListener("change", () => {
-      survey.values[f.key] = control.checked;
+      values[f.key] = control.checked;
+      if (onInput) onInput();
     });
   } else {
     control = document.createElement("input");
-    control.value = survey.values[f.key] ?? "";
+    control.value = values[f.key] ?? "";
     control.autocomplete = "off";
     control.spellcheck = false;
     if (f.hint) { control.placeholder = f.hint; control.classList.add("wide"); }
     if (f.kind === "int" || f.kind === "number") control.inputMode = "decimal";
     control.addEventListener("input", () => {
-      survey.values[f.key] = control.value;
+      values[f.key] = control.value;
       control.classList.remove("bad");
-      autoDesc();
+      if (onInput) onInput();
     });
   }
   control.dataset.key = f.key;
@@ -1637,27 +1866,22 @@ function focusFirstField() {
 
 /* ---- Commit ---- */
 
-function commitRecord() {
-  if (!survey.family) return;
-  const fam = survey.family;
-  const schema = currentSchema();
+/* values bag -> record fields per §2.1: inputs parsed by kind, fixed values
+   stamped, deriveds resolved in a second pass so they see every input
+   (square gets corner_rad 0, ball gets dia/2). Unparsable dia text never
+   silently vanishes into a committed record — it comes back as badKey. */
+function resolveFieldValues(schema, values) {
   const fields = {};
-
   for (const f of schema) {
     if (f.context_strip) continue; // substrate lives top-level on the record
     if (f.mode === "fixed") { fields[f.key] = f.value; continue; }
     if (f.mode === "derived") continue;
-    const raw = survey.values[f.key];
+    const raw = values[f.key];
     if (f.kind === "bool") { fields[f.key] = raw === true; continue; }
     if (raw === undefined || String(raw).trim() === "") continue; // skippable
     if (f.kind === "dia") {
-      // Unparsable text never silently vanishes into a committed record.
       const p = parseDia(raw, f.accepts);
-      if (!p) {
-        const el = formEl.querySelector('[data-key="' + f.key + '"]');
-        if (el) { el.classList.add("bad"); el.focus(); el.select(); }
-        return;
-      }
+      if (!p) return { fields: null, badKey: f.key };
       fields[f.key] = p.value;
       fields[f.key + "_display"] = p.display;
     } else if (f.kind === "int") {
@@ -1670,13 +1894,24 @@ function commitRecord() {
       fields[f.key] = String(raw).trim();
     }
   }
-  // Second pass so deriveds see every input (§2.1: resolved values are
-  // always stored — square gets corner_rad 0, ball gets dia/2).
   for (const f of schema) {
     if (f.mode !== "derived") continue;
     const v = evalDerived(f, fields);
     if (v !== null) fields[f.key] = v;
   }
+  return { fields, badKey: null };
+}
+
+function markBadField(root, key) {
+  const el = root.querySelector('[data-key="' + key + '"]');
+  if (el) { el.classList.add("bad"); el.focus(); if (el.select) el.select(); }
+}
+
+function commitRecord() {
+  if (!survey.family) return;
+  const fam = survey.family;
+  const { fields, badKey } = resolveFieldValues(currentSchema(), survey.values);
+  if (badKey) { markBadField(formEl, badKey); return; }
 
   let id = survey.id.trim().toUpperCase();
   const idInput = stripEl.querySelector(".strip-id input");
@@ -1713,8 +1948,30 @@ function commitRecord() {
     updated_by: auth && auth.name ? auth.name : "unknown"
   };
 
+  // An ID change during a correction is only legal while the original op is
+  // still pending (the typo'd file never reached the repo): drop that op and
+  // its optimistic record so no orphan file lands. Once synced the ID input
+  // is disabled, but re-check here in case the op synced mid-edit.
+  let verb = "add";
+  if (editingId) {
+    const pendingIdx = queueOps().findIndex(o =>
+      o.path === survey.editingPath && o.state === "pending");
+    if (id !== editingId) {
+      if (pendingIdx < 0) {
+        if (idInput) { idInput.classList.add("bad"); idInput.focus(); }
+        return;
+      }
+      const ops = queueOps();
+      ops.splice(pendingIdx, 1);
+      saveQueue(ops);
+      delete store.items[editingId];
+    } else {
+      verb = pendingIdx >= 0 ? "add" : "update";
+    }
+  }
+
   const path = "items/" + id + ".json";
-  const summary = ("add " + id + " " + item.description).trim();
+  const summary = (verb + " " + id + " " + item.description).trim();
   enqueueItemWrite(path, JSON.stringify(item, null, 2) + "\n", summary);
 
   const existing = survey.session.find(s => s.path === survey.editingPath);
@@ -1798,11 +2055,15 @@ function loadIntoForm(id, fresh) {
   if (fresh) {
     survey.id = nextId(fam.prefix);
     survey.idTouched = false;
+    survey.idLocked = false;
     survey.editingPath = null;
   } else {
     survey.id = item.id;
     survey.idTouched = true;
     survey.editingPath = "items/" + item.id + ".json";
+    // Synced = the file exists in the repo under this name; the ID is final.
+    survey.idLocked = !queueOps().some(o =>
+      o.path === survey.editingPath && o.state === "pending");
   }
   survey.desc = item.description || "";
   survey.descTouched = survey.desc !== buildDesc();
@@ -1836,6 +2097,611 @@ if (window.CATEGORIES) {
 } else {
   pickerEl.textContent =
     "categories.js failed to load — it must sit in the same folder as index.html.";
+}
+
+/* ================= Crib (build step 5) =================
+   Dense table over store.items with search + chips, inline qty edit on the
+   count cell, and a right-side detail drawer. Qty changes write a
+   correction log event; git history is the undo system. */
+
+const cribFilter = { q: "", family: null, low: false, out: false, archived: false };
+
+const cribTbody  = document.getElementById("crib-tbody");
+const cribTable  = document.getElementById("crib-table");
+const cribEmpty  = document.getElementById("crib-empty");
+const cribSearch = document.getElementById("crib-search");
+const drawerEl   = document.getElementById("drawer");
+
+function authName() {
+  const auth = getAuth();
+  return auth && auth.name ? auth.name : "unknown";
+}
+
+function famOf(item)  { return CATEGORIES.families.find(f => f.key === item.family); }
+function typeOf(item) { const f = famOf(item); return f && f.types.find(t => t.key === item.type); }
+
+/* §2.2 count math: available = qty_on_hand − Σ(open "out" lines). */
+function qtyOut(itemId) {
+  let out = 0;
+  for (const t of Object.values(store.tagouts)) {
+    if (t.status !== "open") continue;
+    for (const l of t.lines || []) {
+      if (l.item_id === itemId && l.state === "out") out += l.qty;
+    }
+  }
+  return out;
+}
+
+function isLow(item) {
+  return item.consumable && !item.archived && item.qty_on_hand <= item.min_qty;
+}
+
+function writeLogEvent(ev) {
+  const full = {
+    ts: new Date().toISOString(), user: authName(),
+    item_id: ev.item_id, type: ev.type, delta: ev.delta,
+    qty_after: ev.qty_after, ref: ev.ref ?? null, reason: ev.reason ?? ""
+  };
+  const path = "log/" + full.ts.slice(0, 7) + "/" + crypto.randomUUID() + ".json";
+  enqueueWrite(path, JSON.stringify(full, null, 2) + "\n",
+    "log " + full.item_id + " " + full.type +
+    (full.delta ? " " + (full.delta > 0 ? "+" : "") + full.delta : ""));
+}
+
+/* ---- Qty corrections: optimistic immediately, committed after a beat so
+   stepper taps in the drawer collapse into one commit + one log event. ---- */
+
+const qtyEdits = {}; // item id -> { from, timer }
+
+function setQty(id, newQty, immediate) {
+  const item = store.items[id];
+  if (!item) return;
+  newQty = Math.max(0, Math.floor(newQty));
+  if (!(id in qtyEdits)) qtyEdits[id] = { from: item.qty_on_hand, timer: null };
+  item.qty_on_hand = newQty;
+  renderCrib();
+  clearTimeout(qtyEdits[id].timer);
+  if (immediate) commitQty(id);
+  else qtyEdits[id].timer = setTimeout(() => commitQty(id), 900);
+}
+
+function commitQty(id) {
+  const edit = qtyEdits[id];
+  delete qtyEdits[id];
+  const item = store.items[id];
+  if (!edit || !item || item.qty_on_hand === edit.from) return;
+  const updated = {
+    ...item,
+    updated_at: new Date().toISOString(),
+    updated_by: authName()
+  };
+  enqueueItemWrite("items/" + id + ".json",
+    JSON.stringify(updated, null, 2) + "\n",
+    id + " qty " + edit.from + "→" + item.qty_on_hand);
+  writeLogEvent({
+    item_id: id, type: "correction",
+    delta: item.qty_on_hand - edit.from, qty_after: item.qty_on_hand
+  });
+}
+
+/* ---- Filters ---- */
+
+function cribMatches(item) {
+  if (item.archived && !cribFilter.archived) return false;
+  if (cribFilter.family && item.family !== cribFilter.family) return false;
+  if (cribFilter.low && !isLow(item)) return false;
+  if (cribFilter.out && qtyOut(item.id) === 0) return false;
+  const q = cribFilter.q.trim().toLowerCase();
+  if (q) {
+    const hay = (item.id + " " + (item.description || "") + " " +
+      (item.mfr_part_number || "")).toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+
+function buildCribChips() {
+  const row = document.getElementById("crib-chips");
+  row.textContent = "";
+  const mk = (label, isOn, toggle) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (isOn() ? " on" : "");
+    b.textContent = label;
+    b.addEventListener("click", () => { toggle(); buildCribChips(); renderCrib(); });
+    row.appendChild(b);
+  };
+  for (const fam of CATEGORIES.families.filter(f => f.enabled)) {
+    mk(fam.label, () => cribFilter.family === fam.key,
+      () => { cribFilter.family = cribFilter.family === fam.key ? null : fam.key; });
+  }
+  mk("low stock", () => cribFilter.low, () => { cribFilter.low = !cribFilter.low; });
+  mk("out on tag-out", () => cribFilter.out, () => { cribFilter.out = !cribFilter.out; });
+  mk("show archived", () => cribFilter.archived,
+    () => { cribFilter.archived = !cribFilter.archived; });
+}
+
+cribSearch.addEventListener("input", () => {
+  cribFilter.q = cribSearch.value;
+  renderCrib();
+});
+
+/* ---- Table ---- */
+
+function renderCrib() {
+  if (!cribTbody) return;
+  // Don't rebuild the table out from under an in-progress inline qty edit.
+  if (document.activeElement && cribTbody.contains(document.activeElement)) return;
+
+  const all = Object.values(store.items);
+  if (all.length === 0) {
+    cribEmpty.hidden = false;
+    cribEmpty.textContent = store.loaded ? "No items yet — go add tools." : "No items yet.";
+    cribTable.hidden = true;
+    cribTbody.textContent = "";
+    return;
+  }
+
+  const items = all.filter(cribMatches).sort((a, b) => a.id < b.id ? -1 : 1);
+  if (items.length === 0) {
+    cribEmpty.hidden = false;
+    cribEmpty.textContent = "Nothing matches the search/filters.";
+    cribTable.hidden = true;
+    cribTbody.textContent = "";
+    return;
+  }
+  cribEmpty.hidden = true;
+  cribTable.hidden = false;
+
+  cribTbody.textContent = "";
+  for (const item of items) {
+    const tr = document.createElement("tr");
+    tr.className = (isLow(item) ? "low " : "") + (item.archived ? "archived" : "");
+    tr.dataset.id = item.id;
+
+    const tdId = document.createElement("td");
+    tdId.className = "id-cell";
+    tdId.textContent = item.id;
+    tr.appendChild(tdId);
+
+    const tdDecal = document.createElement("td");
+    const type = typeOf(item);
+    if (type) tdDecal.innerHTML =
+      '<svg class="decal row-decal" aria-hidden="true"><use href="#' + type.decal + '"/></svg>';
+    tr.appendChild(tdDecal);
+
+    const tdDesc = document.createElement("td");
+    const descSpan = document.createElement("span");
+    descSpan.textContent = item.description || "";
+    tdDesc.appendChild(descSpan);
+    // The one substrate exception in the shop, visible at a glance.
+    if (item.substrate === "HSS" || item.substrate === "cobalt") {
+      const b = document.createElement("span");
+      b.className = "badge hss"; b.textContent = "HSS";
+      tdDesc.appendChild(b);
+    }
+    if (isLow(item)) {
+      const b = document.createElement("span");
+      b.className = "badge low"; b.textContent = "low";
+      tdDesc.appendChild(b);
+    }
+    if (item.archived) {
+      const b = document.createElement("span");
+      b.className = "badge arch"; b.textContent = "archived";
+      tdDesc.appendChild(b);
+    }
+    tr.appendChild(tdDesc);
+
+    const tdCount = document.createElement("td");
+    tdCount.className = "count-cell";
+    const avail = item.qty_on_hand - qtyOut(item.id);
+    tdCount.textContent = avail + " / " + item.qty_on_hand;
+    tdCount.title = "Click to correct the on-hand count";
+    tdCount.addEventListener("click", e => {
+      e.stopPropagation();
+      startInlineQty(tdCount, item.id);
+    });
+    tr.appendChild(tdCount);
+
+    const tdFam = document.createElement("td");
+    tdFam.className = "fam-cell";
+    const fam = famOf(item);
+    tdFam.textContent = fam ? fam.label : item.family;
+    tr.appendChild(tdFam);
+
+    const tdOrder = document.createElement("td");
+    if (item.order_url) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn-ghost";
+      b.textContent = "order";
+      b.addEventListener("click", e => {
+        e.stopPropagation();
+        window.open(item.order_url, "_blank", "noopener");
+      });
+      tdOrder.appendChild(b);
+    }
+    tr.appendChild(tdOrder);
+
+    tr.addEventListener("click", () => openDrawer(item.id));
+    cribTbody.appendChild(tr);
+  }
+}
+
+/* Inline qty on the count cell: click, type, Enter (§4.1). */
+function startInlineQty(cell, id) {
+  const item = store.items[id];
+  if (!item || cell.querySelector("input")) return;
+  cell.textContent = "";
+  const input = document.createElement("input");
+  input.value = item.qty_on_hand;
+  input.inputMode = "numeric";
+  cell.appendChild(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = commit => {
+    if (done) return;
+    done = true;
+    const n = parseInt(input.value, 10);
+    input.blur();
+    if (commit && !isNaN(n) && n !== item.qty_on_hand) setQty(id, n, true);
+    else renderCrib();
+  };
+  input.addEventListener("keydown", e => {
+    e.stopPropagation();
+    if (e.key === "Enter") finish(true);
+    if (e.key === "Escape") finish(false);
+  });
+  input.addEventListener("blur", () => finish(true));
+  input.addEventListener("click", e => e.stopPropagation());
+}
+
+/* ---- Detail drawer: all fields editable, plain dropdowns (the picker is
+   for creation only), qty steppers, tag-out lines, archive. ---- */
+
+const drawerState = { id: null, fam: null, type: null, values: {}, meta: {} };
+
+function openDrawer(id) {
+  const item = store.items[id];
+  if (!item) return;
+  drawerState.id = id;
+  drawerState.fam = famOf(item) || null;
+  drawerState.type = typeOf(item) || null;
+  drawerState.values = {};
+  if (drawerState.fam && drawerState.type) {
+    for (const f of resolveSchema(drawerState.fam, drawerState.type)) {
+      if (f.mode !== "input") continue;
+      if (f.kind === "bool") {
+        drawerState.values[f.key] = item.fields[f.key] === true;
+      } else if (f.kind === "dia") {
+        const v = item.fields[f.key + "_display"] ?? item.fields[f.key];
+        if (v !== undefined && v !== null) drawerState.values[f.key] = String(v);
+      } else if (item.fields[f.key] !== undefined && item.fields[f.key] !== null) {
+        drawerState.values[f.key] = String(item.fields[f.key]);
+      }
+    }
+  }
+  drawerState.meta = {
+    description: item.description || "",
+    substrate: item.substrate ?? null,
+    mfr_part_number: item.mfr_part_number || "",
+    vendor: item.vendor || "",
+    order_url: item.order_url || "",
+    notes: item.notes || "",
+    min_qty: String(item.min_qty ?? 0),
+    consumable: item.consumable !== false
+  };
+  renderDrawer();
+}
+
+function closeDrawer() {
+  drawerState.id = null;
+  drawerEl.classList.remove("open");
+  drawerEl.textContent = "";
+}
+
+function drawerMetaInput(label, key, wide) {
+  return simpleField(label, "__" + key, drawerState.meta[key], input => {
+    if (wide) input.classList.add("desc");
+    input.addEventListener("input", () => { drawerState.meta[key] = input.value; });
+  });
+}
+
+function renderDrawer() {
+  const item = store.items[drawerState.id];
+  if (!item) { closeDrawer(); return; }
+  drawerEl.textContent = "";
+  drawerEl.classList.add("open");
+
+  const head = document.createElement("div");
+  head.className = "drawer-head";
+  const type = drawerState.type;
+  head.innerHTML = (type ? decalSvg(type.decal) : "") + "<h2></h2>";
+  head.querySelector("h2").textContent = item.id;
+  if (item.archived) {
+    const b = document.createElement("span");
+    b.className = "badge arch"; b.textContent = "archived";
+    head.querySelector("h2").after(b);
+  }
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "drawer-close";
+  close.textContent = "×";
+  close.title = "Close (Esc)";
+  close.addEventListener("click", closeDrawer);
+  head.appendChild(close);
+  drawerEl.appendChild(head);
+
+  // Family/type as plain dropdowns — re-picking re-renders the field list,
+  // values carry over where keys match.
+  const famRow = document.createElement("div");
+  famRow.className = "field-row";
+  const famSel = document.createElement("select");
+  const typeSel = document.createElement("select");
+  for (const f of CATEGORIES.families.filter(f => f.enabled)) {
+    const o = document.createElement("option");
+    o.value = f.key; o.textContent = f.label;
+    famSel.appendChild(o);
+  }
+  const fillTypes = () => {
+    typeSel.textContent = "";
+    for (const t of (drawerState.fam ? drawerState.fam.types : [])) {
+      const o = document.createElement("option");
+      o.value = t.key; o.textContent = t.label;
+      typeSel.appendChild(o);
+    }
+    if (drawerState.type) typeSel.value = drawerState.type.key;
+  };
+  if (drawerState.fam) famSel.value = drawerState.fam.key;
+  fillTypes();
+  famSel.addEventListener("change", () => {
+    drawerState.fam = CATEGORIES.families.find(f => f.key === famSel.value);
+    drawerState.type = drawerState.fam.types[0] || null;
+    drawerState.meta.substrate = defaultSubstrate(drawerState.fam);
+    renderDrawer();
+  });
+  typeSel.addEventListener("change", () => {
+    drawerState.type = drawerState.fam.types.find(t => t.key === typeSel.value);
+    renderDrawer();
+  });
+  const wrapSel = (label, sel) => {
+    const w = document.createElement("div");
+    w.className = "field";
+    const l = document.createElement("label");
+    l.textContent = label;
+    w.appendChild(l); w.appendChild(sel);
+    return w;
+  };
+  famRow.appendChild(wrapSel("Family", famSel));
+  famRow.appendChild(wrapSel("Type", typeSel));
+
+  // Substrate as a plain control here, context strip is survey-only.
+  const subF = drawerState.fam && drawerState.fam.fields.find(f => f.key === "substrate");
+  if (subF && subF.mode === "input") {
+    const subSel = document.createElement("select");
+    for (const opt of subF.options) {
+      const o = document.createElement("option");
+      o.value = opt; o.textContent = opt;
+      subSel.appendChild(o);
+    }
+    subSel.value = drawerState.meta.substrate ?? subF.default ?? subF.options[0];
+    drawerState.meta.substrate = subSel.value;
+    subSel.addEventListener("change", () => { drawerState.meta.substrate = subSel.value; });
+    famRow.appendChild(wrapSel("Substrate", subSel));
+  }
+  drawerEl.appendChild(famRow);
+
+  const descRow = document.createElement("div");
+  descRow.className = "field-row";
+  descRow.appendChild(drawerMetaInput("Description", "description", true));
+  drawerEl.appendChild(descRow);
+
+  if (drawerState.fam && drawerState.type) {
+    const t1 = document.createElement("div");
+    t1.className = "drawer-section-title";
+    t1.textContent = "Fields";
+    drawerEl.appendChild(t1);
+    const fRow = document.createElement("div");
+    fRow.className = "field-row";
+    for (const f of resolveSchema(drawerState.fam, drawerState.type)) {
+      if (f.mode !== "input" || f.key === "substrate") continue;
+      fRow.appendChild(buildField(f, drawerState.values, null));
+    }
+    drawerEl.appendChild(fRow);
+  }
+
+  const t2 = document.createElement("div");
+  t2.className = "drawer-section-title";
+  t2.textContent = "Stock";
+  drawerEl.appendChild(t2);
+
+  const stockRow = document.createElement("div");
+  stockRow.className = "field-row";
+  const qtyWrap = document.createElement("div");
+  qtyWrap.className = "field";
+  const qtyLab = document.createElement("label");
+  qtyLab.textContent = "On hand (commits as correction)";
+  qtyWrap.appendChild(qtyLab);
+  const stepper = document.createElement("div");
+  stepper.className = "qty-stepper";
+  const minus = document.createElement("button");
+  minus.type = "button"; minus.textContent = "−";
+  const qtyInput = document.createElement("input");
+  qtyInput.inputMode = "numeric";
+  qtyInput.value = store.items[drawerState.id].qty_on_hand;
+  const plus = document.createElement("button");
+  plus.type = "button"; plus.textContent = "+";
+  const bump = d => {
+    const cur = store.items[drawerState.id].qty_on_hand;
+    setQty(drawerState.id, cur + d);
+    qtyInput.value = store.items[drawerState.id].qty_on_hand;
+  };
+  minus.addEventListener("click", () => bump(-1));
+  plus.addEventListener("click", () => bump(1));
+  qtyInput.addEventListener("change", () => {
+    const n = parseInt(qtyInput.value, 10);
+    if (!isNaN(n)) setQty(drawerState.id, n);
+    qtyInput.value = store.items[drawerState.id].qty_on_hand;
+  });
+  stepper.append(minus, qtyInput, plus);
+  qtyWrap.appendChild(stepper);
+  stockRow.appendChild(qtyWrap);
+
+  stockRow.appendChild(simpleField("Min", "__min_qty", drawerState.meta.min_qty, input => {
+    input.classList.add("qty");
+    input.inputMode = "numeric";
+    input.addEventListener("input", () => { drawerState.meta.min_qty = input.value; });
+  }));
+
+  const consWrap = document.createElement("label");
+  consWrap.className = "check-field";
+  const consCheck = document.createElement("input");
+  consCheck.type = "checkbox";
+  consCheck.checked = drawerState.meta.consumable;
+  consCheck.addEventListener("change", () => {
+    drawerState.meta.consumable = consCheck.checked;
+  });
+  consWrap.append(consCheck, "consumable");
+  stockRow.appendChild(consWrap);
+  drawerEl.appendChild(stockRow);
+
+  const t3 = document.createElement("div");
+  t3.className = "drawer-section-title";
+  t3.textContent = "Ordering";
+  drawerEl.appendChild(t3);
+  const orderRow = document.createElement("div");
+  orderRow.className = "field-row";
+  orderRow.appendChild(drawerMetaInput("Mfr part #", "mfr_part_number"));
+  orderRow.appendChild(drawerMetaInput("Vendor", "vendor"));
+  orderRow.appendChild(drawerMetaInput("Order URL", "order_url", true));
+  drawerEl.appendChild(orderRow);
+
+  const notesRow = document.createElement("div");
+  notesRow.className = "field-row";
+  notesRow.appendChild(drawerMetaInput("Notes", "notes", true));
+  drawerEl.appendChild(notesRow);
+
+  // Open tag-out lines: who has it and since when.
+  const outLines = [];
+  for (const t of Object.values(store.tagouts)) {
+    if (t.status !== "open") continue;
+    for (const l of t.lines || []) {
+      if (l.item_id === item.id && l.state === "out") outLines.push({ t, l });
+    }
+  }
+  if (outLines.length) {
+    const t4 = document.createElement("div");
+    t4.className = "drawer-section-title";
+    t4.textContent = "Out on tag-out";
+    drawerEl.appendChild(t4);
+    const box = document.createElement("div");
+    box.className = "tagout-lines";
+    for (const { t, l } of outLines) {
+      const d = document.createElement("div");
+      d.className = "tl";
+      d.innerHTML = '<span class="mono"></span> — ';
+      d.querySelector(".mono").textContent = t.id;
+      d.append(t.person + " has " + l.qty + " since " +
+        new Date(t.opened_at).toLocaleDateString());
+      box.appendChild(d);
+    }
+    drawerEl.appendChild(box);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "drawer-actions";
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "btn-small";
+  save.textContent = "Save";
+  save.addEventListener("click", saveDrawer);
+  actions.appendChild(save);
+
+  const arch = document.createElement("button");
+  arch.type = "button";
+  arch.className = "btn-ghost";
+  arch.textContent = item.archived ? "Unarchive" : "Archive";
+  arch.addEventListener("click", () => setArchived(item.id, !item.archived));
+  actions.appendChild(arch);
+
+  if (item.order_url) {
+    const ord = document.createElement("button");
+    ord.type = "button";
+    ord.className = "btn-ghost";
+    ord.textContent = "Order ↗";
+    ord.addEventListener("click", () => window.open(item.order_url, "_blank", "noopener"));
+    actions.appendChild(ord);
+  }
+  drawerEl.appendChild(actions);
+}
+
+function defaultSubstrate(fam) {
+  const subF = fam && fam.fields.find(f => f.key === "substrate");
+  if (!subF) return null;
+  return subF.mode === "fixed" ? subF.value : (subF.default ?? null);
+}
+
+function saveDrawer() {
+  const item = store.items[drawerState.id];
+  if (!item || !drawerState.fam || !drawerState.type) return;
+  const schema = resolveSchema(drawerState.fam, drawerState.type);
+  const { fields, badKey } = resolveFieldValues(schema, drawerState.values);
+  if (badKey) { markBadField(drawerEl, badKey); return; }
+
+  const subF = drawerState.fam.fields.find(f => f.key === "substrate");
+  const substrate = subF
+    ? (subF.mode === "fixed" ? subF.value : (drawerState.meta.substrate || null))
+    : null;
+
+  const updated = {
+    ...item,
+    family: drawerState.fam.key,
+    type: drawerState.type.key,
+    description: drawerState.meta.description.trim(),
+    substrate,
+    fields,
+    mfr_part_number: drawerState.meta.mfr_part_number.trim(),
+    vendor: drawerState.meta.vendor.trim(),
+    order_url: drawerState.meta.order_url.trim(),
+    notes: drawerState.meta.notes,
+    min_qty: parseInt(drawerState.meta.min_qty, 10) || 0,
+    consumable: !!drawerState.meta.consumable,
+    updated_at: new Date().toISOString(),
+    updated_by: authName()
+  };
+  enqueueItemWrite("items/" + item.id + ".json",
+    JSON.stringify(updated, null, 2) + "\n",
+    ("update " + item.id + " " + updated.description).trim());
+  closeDrawer();
+}
+
+function setArchived(id, archived) {
+  const item = store.items[id];
+  if (!item) return;
+  const updated = {
+    ...item, archived,
+    updated_at: new Date().toISOString(),
+    updated_by: authName()
+  };
+  enqueueItemWrite("items/" + id + ".json",
+    JSON.stringify(updated, null, 2) + "\n",
+    (archived ? "archive " : "unarchive ") + id);
+  writeLogEvent({
+    item_id: id, type: archived ? "archive" : "correction",
+    delta: 0, qty_after: item.qty_on_hand,
+    reason: archived ? "" : "unarchived"
+  });
+  closeDrawer();
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && drawerEl.classList.contains("open")) closeDrawer();
+});
+
+if (window.CATEGORIES) {
+  buildCribChips();
+  renderCrib();
 }
 
 /* ---- Boot ---- */
