@@ -196,6 +196,194 @@
   .type-card .decal { width: 30px; height: 30px; color: var(--text-2); }
   .type-card.selected .decal { color: var(--accent-hi); }
 
+  /* ---- Auth modal ---- */
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 22px;
+    width: 100%;
+    max-width: 380px;
+  }
+
+  .modal h2 { font-size: 17px; margin-bottom: 6px; }
+
+  .modal .modal-note {
+    color: var(--text-2);
+    font-size: 13px;
+    margin-bottom: 14px;
+  }
+
+  .modal label {
+    display: block;
+    font-size: 13px;
+    color: var(--text-2);
+    margin: 10px 0 4px;
+  }
+
+  .modal input {
+    width: 100%;
+    font: inherit;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+
+  .modal .modal-error {
+    color: var(--low);
+    font-size: 13px;
+    margin-top: 10px;
+    display: none;
+  }
+
+  .btn-primary {
+    display: block;
+    width: 100%;
+    margin-top: 16px;
+    padding: 9px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 6px;
+    font-weight: 600;
+  }
+
+  .btn-primary:hover { background: var(--accent-hi); }
+
+  /* ---- Sync chip + panel ---- */
+
+  .sync-chip {
+    position: fixed;
+    top: 10px;
+    right: 12px;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 13px;
+    color: var(--text-2);
+  }
+
+  .sync-chip .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-2);
+  }
+
+  .sync-chip.synced   .dot { background: var(--ok); }
+  .sync-chip.pending  .dot { background: var(--warn); }
+  .sync-chip.offline  .dot { background: var(--text-2); }
+  .sync-chip.conflict .dot { background: var(--low); }
+  .sync-chip.pending  { color: var(--warn); }
+  .sync-chip.conflict { color: var(--low); }
+
+  .sync-panel {
+    position: fixed;
+    top: 44px;
+    right: 12px;
+    z-index: 40;
+    width: 320px;
+    max-width: calc(100vw - 24px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    display: none;
+  }
+
+  .sync-panel.open { display: block; }
+
+  .sync-panel h3 { font-size: 14px; margin-bottom: 8px; }
+
+  .sync-panel .queue-list {
+    max-height: 180px;
+    overflow-y: auto;
+    font-size: 13px;
+    color: var(--text-2);
+    margin-bottom: 10px;
+  }
+
+  .sync-panel .queue-list .op {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sync-panel .queue-list .op.conflict { color: var(--low); }
+
+  .sync-panel .panel-row { display: flex; gap: 8px; margin-top: 8px; }
+
+  .sync-panel input {
+    flex: 1;
+    font: inherit;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 9px;
+    min-width: 0;
+  }
+
+  .btn-small {
+    padding: 6px 12px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .btn-small:hover { background: var(--accent-hi); }
+
+  .btn-ghost {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-2);
+  }
+
+  .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
+
+  .sync-panel .panel-hint { font-size: 12px; color: var(--text-2); margin-top: 8px; }
+
+  /* ---- Conflict banner ---- */
+
+  .conflict-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 45;
+    background: #3a1418;
+    border-bottom: 1px solid var(--low);
+    color: var(--low);
+    font-size: 14px;
+    padding: 9px 14px;
+    display: none;
+  }
+
+  .conflict-banner.open { display: block; }
+
   @media (max-width: 720px) {
     .app { grid-template-columns: 1fr; }
 
@@ -285,7 +473,7 @@
   <main>
     <section class="screen" id="screen-crib">
       <h1>Crib</h1>
-      <div class="empty-state">No items yet.</div>
+      <div class="empty-state" id="crib-empty">No items yet.</div>
     </section>
 
     <section class="screen" id="screen-add">
@@ -308,6 +496,43 @@
       <div class="empty-state">No log events.</div>
     </section>
   </main>
+</div>
+
+<div class="conflict-banner" id="conflict-banner"></div>
+
+<button type="button" class="sync-chip" id="sync-chip" aria-haspopup="true">
+  <span class="dot"></span><span id="sync-chip-text">…</span>
+</button>
+
+<div class="sync-panel" id="sync-panel">
+  <h3>Write queue</h3>
+  <div class="queue-list" id="queue-list"></div>
+  <div class="panel-row">
+    <input id="person-input" placeholder="Add person (test write)">
+    <button type="button" class="btn-small" id="person-add">Add</button>
+  </div>
+  <div class="panel-row">
+    <button type="button" class="btn-ghost" id="queue-retry">Retry now</button>
+    <button type="button" class="btn-ghost" id="reload-data">Refresh data</button>
+  </div>
+  <div class="panel-hint">Adding a person appends to people.json in the data
+  repo — the simplest real write for testing the queue.</div>
+</div>
+
+<div class="modal-overlay" id="auth-modal">
+  <div class="modal">
+    <h2>Connect to the data repo</h2>
+    <div class="modal-note">Name goes in commit messages. The token needs
+    Contents read/write on the data repo (fine-grained or classic — both
+    work). Both stay in this browser's localStorage only.</div>
+    <label for="auth-name">Display name</label>
+    <input id="auth-name" autocomplete="off" placeholder="leem">
+    <label for="auth-token">GitHub token</label>
+    <input id="auth-token" type="password" autocomplete="off"
+           placeholder="github_pat_… or ghp_…">
+    <div class="modal-error" id="auth-error"></div>
+    <button type="button" class="btn-primary" id="auth-save">Save &amp; load</button>
+  </div>
 </div>
 
 <script src="categories.js"></script>
@@ -383,12 +608,14 @@ function buildTypePicker(container, onChange) {
         const familyChanged = sel.family !== fam;
         sel.family = fam;
         sel.type = type;
-        // Substrate resets to the family default when the family changes,
-        // otherwise the operator's pick persists across entries (4.2).
-        if (!fam.substrate) {
+        // Substrate is a schema field with context_strip: true. It resets to
+        // the family default when the family changes, otherwise the
+        // operator's pick persists across entries (4.2).
+        const subF = fam.fields.find(f => f.key === "substrate");
+        if (!subF) {
           sel.substrate = null;
         } else if (familyChanged || sel.substrate === null) {
-          sel.substrate = fam.substrate.default;
+          sel.substrate = subF.mode === "fixed" ? subF.value : subF.default;
         }
         refresh();
       });
@@ -419,11 +646,11 @@ function buildTypePicker(container, onChange) {
     label.textContent = sel.family.label + " · " + sel.type.label;
     strip.appendChild(label);
 
-    const sub = sel.family.substrate;
-    if (sub && sub.mode === "visible") {
+    const subF = sel.family.fields.find(f => f.key === "substrate");
+    if (subF && subF.mode === "input") {
       const seg = document.createElement("div");
       seg.className = "seg";
-      for (const opt of sub.options) {
+      for (const opt of subF.options) {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "seg-btn" + (opt === sel.substrate ? " active" : "");
@@ -432,8 +659,8 @@ function buildTypePicker(container, onChange) {
         seg.appendChild(btn);
       }
       strip.appendChild(seg);
-    } else if (sub) {
-      // Hidden-mode substrate (endmills -> carbide) still applies; show it
+    } else if (subF) {
+      // Fixed-mode substrate (endmills -> carbide) still applies; show it
       // quietly so the context strip tells the whole truth.
       const note = document.createElement("div");
       note.className = "context-hint";
@@ -459,6 +686,453 @@ if (window.CATEGORIES) {
 } else {
   document.getElementById("add-picker").textContent =
     "categories.js failed to load — it must sit in the same folder as index.html.";
+}
+
+/* ================= GitHub data layer (build step 3) =================
+   Auth prompt -> tree fetch -> batched blob reads -> localStorage cache
+   keyed on tree SHA -> writeQueue. The writeQueue is a write-RELIABILITY
+   queue for flaky shop wifi, not an offline mode: every write lands here
+   first, the UI updates optimistically, and the queue flushes in the
+   background with retry + backoff. Nothing is ever silently dropped. */
+
+const DATA_REPO   = "assassinleem/tool_crib_data";
+const DATA_BRANCH = "main";
+const API_BASE    = "https://api.github.com";
+const LS_AUTH  = "tc_auth";
+const LS_CACHE = "tc_cache";
+const LS_QUEUE = "tc_writeQueue";
+const BLOB_BATCH = 20;
+const BACKOFF_BASE_MS = 2000;
+const BACKOFF_CAP_MS  = 60000;
+
+/* In-memory store, rebuilt from the cache on every load. */
+const store = { items: {}, tagouts: {}, logEvents: {}, people: [], loaded: false };
+
+function lsGet(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+  catch { return fallback; }
+}
+function lsSet(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+
+/* ---- Base64 that survives non-ASCII (TextEncoder route, not raw btoa) ---- */
+
+function b64EncodeUtf8(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+
+function b64DecodeUtf8(b64) {
+  const bin = atob(b64.replace(/\s/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+/* ---- Auth: display name + token in localStorage, re-prompt on 401 ---- */
+
+function getAuth() { return lsGet(LS_AUTH, null); }
+
+function showAuthModal(errorMsg) {
+  const modal = document.getElementById("auth-modal");
+  const err = document.getElementById("auth-error");
+  const auth = getAuth();
+  if (auth && auth.name) document.getElementById("auth-name").value = auth.name;
+  err.textContent = errorMsg || "";
+  err.style.display = errorMsg ? "block" : "none";
+  modal.classList.add("open");
+}
+
+document.getElementById("auth-save").addEventListener("click", () => {
+  const name = document.getElementById("auth-name").value.trim();
+  const token = document.getElementById("auth-token").value.trim();
+  if (!name || !token) {
+    showAuthModal("Both fields are required.");
+    return;
+  }
+  lsSet(LS_AUTH, { name, token });
+  document.getElementById("auth-token").value = "";
+  document.getElementById("auth-modal").classList.remove("open");
+  boot();
+});
+
+let reauthShown = false;
+function handleAuthFailure() {
+  if (reauthShown) return;
+  reauthShown = true;
+  const auth = getAuth();
+  if (auth) lsSet(LS_AUTH, { name: auth.name, token: "" });
+  showAuthModal("GitHub said 401 — token invalid or expired. Paste a fresh one; queued writes are kept.");
+}
+
+/* ---- API wrapper. Fine-grained and classic PATs both go out as Bearer. ---- */
+
+function ghFetch(path, opts = {}) {
+  const auth = getAuth();
+  return fetch(API_BASE + path, {
+    ...opts,
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "Authorization": "Bearer " + (auth ? auth.token : ""),
+      ...(opts.headers || {})
+    }
+  }).then(res => {
+    if (res.status === 401) {
+      handleAuthFailure();
+      const e = new Error("401"); e.status = 401; throw e;
+    }
+    return res;
+  });
+}
+
+/* ---- Load: tree fetch, batched blob reads, cache keyed on tree SHA ---- */
+
+function loadCache() { return lsGet(LS_CACHE, { treeSha: null, files: {} }); }
+function saveCache(cache) { lsSet(LS_CACHE, cache); }
+
+async function loadData() {
+  const cache = loadCache();
+  ingest(cache); // show cached data immediately; network refresh follows
+
+  let treeRes;
+  try {
+    treeRes = await ghFetch(
+      `/repos/${DATA_REPO}/git/trees/${DATA_BRANCH}?recursive=1`);
+  } catch (e) {
+    if (e.status === 401) return;
+    netDown = true; updateChip();
+    return; // offline — cached data stands
+  }
+  netDown = false;
+
+  if (treeRes.status === 404 || treeRes.status === 409) {
+    // Branch missing or repo empty — legitimate on a brand-new data repo.
+    store.loaded = true; renderCrib(); updateChip();
+    return;
+  }
+  if (!treeRes.ok) { updateChip(); return; }
+
+  const tree = await treeRes.json();
+  if (cache.treeSha === tree.sha) {
+    store.loaded = true; renderCrib(); updateChip();
+    return; // nothing changed since last visit
+  }
+
+  const wanted = tree.tree.filter(n =>
+    n.type === "blob" && n.path.endsWith(".json"));
+
+  // Only refetch blobs whose SHA changed; batched parallel reads.
+  const stale = wanted.filter(n =>
+    !cache.files[n.path] || cache.files[n.path].sha !== n.sha);
+  for (let i = 0; i < stale.length; i += BLOB_BATCH) {
+    await Promise.all(stale.slice(i, i + BLOB_BATCH).map(async n => {
+      const res = await ghFetch(`/repos/${DATA_REPO}/git/blobs/${n.sha}`);
+      if (!res.ok) throw new Error("blob fetch failed: " + n.path);
+      const blob = await res.json();
+      cache.files[n.path] = { sha: n.sha, text: b64DecodeUtf8(blob.content) };
+    }));
+  }
+
+  // Drop cache entries for files no longer in the tree.
+  const live = new Set(wanted.map(n => n.path));
+  for (const path of Object.keys(cache.files)) {
+    if (!live.has(path)) delete cache.files[path];
+  }
+
+  cache.treeSha = tree.sha;
+  saveCache(cache);
+  ingest(cache);
+}
+
+function ingest(cache) {
+  store.items = {}; store.tagouts = {}; store.logEvents = {}; store.people = [];
+  for (const [path, file] of Object.entries(cache.files)) {
+    let data;
+    try { data = JSON.parse(file.text); } catch { continue; }
+    if (path === "people.json")            store.people = data;
+    else if (path.startsWith("items/"))    store.items[data.id] = data;
+    else if (path.startsWith("tagouts/"))  store.tagouts[data.id] = data;
+    else if (path.startsWith("log/"))      store.logEvents[path] = data;
+  }
+  // Queued-but-unflushed writes replay on top so the UI stays optimistic.
+  for (const op of queueOps()) applyOptimistic(op);
+  store.loaded = cache.treeSha !== null;
+  renderCrib();
+  updateChip();
+}
+
+function renderCrib() {
+  const n = Object.keys(store.items).length;
+  const el = document.getElementById("crib-empty");
+  el.textContent = n === 0
+    ? "No items yet."
+    : n + " item" + (n === 1 ? "" : "s") + " loaded — table lands in step 5.";
+}
+
+/* ---- writeQueue ----
+   Op shape: { id, path, content, summary, patch?, attempts, state, nextAt }
+   - content: full file text to write
+   - patch:   optional shallow key->value object; on a 409 the file is
+              refetched and the patch is reapplied on top before the one
+              retry, so a qty change survives the other user editing the
+              same record. Ops without a patch retry with full content.
+   - state:   "pending" | "conflict" (conflict = 409 twice; banner, kept) */
+
+function queueOps() { return lsGet(LS_QUEUE, []); }
+function saveQueue(ops) { lsSet(LS_QUEUE, ops); }
+
+let netDown = false;
+let flushing = false;
+let flushTimer = null;
+
+function enqueueWrite(path, content, summary, patch) {
+  const ops = queueOps();
+  ops.push({
+    id: crypto.randomUUID(), path, content, summary,
+    patch: patch || null, attempts: 0, state: "pending", nextAt: 0
+  });
+  saveQueue(ops);
+  applyOptimistic(ops[ops.length - 1]);
+  renderCrib(); updateChip(); renderQueuePanel();
+  flushQueue();
+}
+
+function applyOptimistic(op) {
+  let data;
+  try { data = JSON.parse(op.content); } catch { return; }
+  if (op.path === "people.json")           store.people = data;
+  else if (op.path.startsWith("items/"))   store.items[data.id] = data;
+  else if (op.path.startsWith("tagouts/")) store.tagouts[data.id] = data;
+  else if (op.path.startsWith("log/"))     store.logEvents[op.path] = data;
+}
+
+function commitMessage(op) {
+  const auth = getAuth();
+  return (auth && auth.name ? auth.name : "unknown") + ": " + op.summary;
+}
+
+async function fetchFileFresh(path) {
+  const res = await ghFetch(
+    `/repos/${DATA_REPO}/contents/${path}?ref=${DATA_BRANCH}`);
+  if (res.status === 404) return null;
+  if (!res.ok) { const e = new Error("GET " + res.status); e.status = res.status; throw e; }
+  const json = await res.json();
+  const file = { sha: json.sha, text: b64DecodeUtf8(json.content) };
+  const cache = loadCache();
+  cache.files[path] = file;
+  saveCache(cache);
+  return file;
+}
+
+async function putFile(path, content, message, sha) {
+  const body = { message, content: b64EncodeUtf8(content), branch: DATA_BRANCH };
+  if (sha) body.sha = sha;
+  return ghFetch(`/repos/${DATA_REPO}/contents/${path}`, {
+    method: "PUT", body: JSON.stringify(body)
+  });
+}
+
+function recordWriteInCache(path, content, newSha) {
+  const cache = loadCache();
+  cache.files[path] = { sha: newSha, text: content };
+  // treeSha is now stale; null it so the next load refetches the tree but
+  // still reuses every per-file blob that didn't change.
+  cache.treeSha = null;
+  saveCache(cache);
+}
+
+/* Push one op. Returns "done" or "conflict"; throws on network/5xx. */
+async function pushOp(op) {
+  const cache = loadCache();
+  let sha = cache.files[op.path] ? cache.files[op.path].sha : undefined;
+  if (sha === undefined) {
+    const fresh = await fetchFileFresh(op.path);
+    sha = fresh ? fresh.sha : undefined;
+  }
+
+  let res = await putFile(op.path, op.content, commitMessage(op), sha);
+
+  // 409 = sha mismatch (other user edited the same file); 422 covers the
+  // "file exists but no sha sent" edge. Refetch, reapply, retry once.
+  if (res.status === 409 || res.status === 422) {
+    const fresh = await fetchFileFresh(op.path);
+    let content = op.content;
+    if (op.patch && fresh) {
+      try {
+        content = JSON.stringify(
+          { ...JSON.parse(fresh.text), ...op.patch }, null, 2) + "\n";
+      } catch { /* remote unparsable — write ours whole */ }
+    }
+    res = await putFile(op.path, content, commitMessage(op),
+                        fresh ? fresh.sha : undefined);
+    if (res.status === 409 || res.status === 422) return "conflict";
+    op.content = content;
+  }
+
+  if (!res.ok) { const e = new Error("PUT " + res.status); e.status = res.status; throw e; }
+  const json = await res.json();
+  recordWriteInCache(op.path, op.content, json.content.sha);
+  return "done";
+}
+
+async function flushQueue() {
+  if (flushing) return;
+  flushing = true;
+  try {
+    let ops = queueOps();
+    for (const op of ops) {
+      if (op.state !== "pending" || Date.now() < op.nextAt) continue;
+      try {
+        const result = await pushOp(op);
+        netDown = false;
+        ops = queueOps();
+        const idx = ops.findIndex(o => o.id === op.id);
+        if (result === "done") {
+          if (idx >= 0) ops.splice(idx, 1);
+        } else {
+          if (idx >= 0) ops[idx].state = "conflict";
+        }
+        saveQueue(ops);
+      } catch (e) {
+        if (e.status === 401) break; // reauth modal is up; queue is kept
+        // network error or 5xx: retry with exponential backoff
+        netDown = !e.status;
+        ops = queueOps();
+        const idx = ops.findIndex(o => o.id === op.id);
+        if (idx >= 0) {
+          ops[idx].attempts += 1;
+          ops[idx].nextAt = Date.now() + Math.min(
+            BACKOFF_BASE_MS * Math.pow(2, ops[idx].attempts - 1),
+            BACKOFF_CAP_MS);
+        }
+        saveQueue(ops);
+      }
+      updateChip(); renderQueuePanel(); renderConflictBanner();
+    }
+  } finally {
+    flushing = false;
+  }
+  scheduleNextFlush();
+}
+
+function scheduleNextFlush() {
+  clearTimeout(flushTimer);
+  const pending = queueOps().filter(o => o.state === "pending");
+  if (pending.length === 0) return;
+  const wait = Math.max(250,
+    Math.min(...pending.map(o => o.nextAt)) - Date.now());
+  flushTimer = setTimeout(flushQueue, wait);
+}
+
+/* ---- Sync chip / panel / conflict banner ---- */
+
+function updateChip() {
+  const chip = document.getElementById("sync-chip");
+  const text = document.getElementById("sync-chip-text");
+  const ops = queueOps();
+  const conflicts = ops.filter(o => o.state === "conflict").length;
+  const pending = ops.filter(o => o.state === "pending").length;
+  chip.className = "sync-chip";
+  if (conflicts) {
+    chip.classList.add("conflict");
+    text.textContent = conflicts + " conflict" + (conflicts > 1 ? "s" : "");
+  } else if (pending) {
+    chip.classList.add("pending");
+    text.textContent = pending + " pending";
+  } else if (!navigator.onLine || netDown) {
+    chip.classList.add("offline");
+    text.textContent = "offline";
+  } else {
+    chip.classList.add("synced");
+    text.textContent = "synced";
+  }
+}
+
+function renderQueuePanel() {
+  const list = document.getElementById("queue-list");
+  const ops = queueOps();
+  if (ops.length === 0) {
+    list.innerHTML = '<div class="op">Queue empty — everything is in the repo.</div>';
+    return;
+  }
+  list.innerHTML = "";
+  for (const op of ops) {
+    const div = document.createElement("div");
+    div.className = "op" + (op.state === "conflict" ? " conflict" : "");
+    div.textContent = op.path + " — " + op.summary +
+      (op.state === "conflict" ? " (conflict)"
+        : op.attempts > 0 ? " (retry " + op.attempts + ")" : "");
+    list.appendChild(div);
+  }
+}
+
+function renderConflictBanner() {
+  const banner = document.getElementById("conflict-banner");
+  const conflicts = queueOps().filter(o => o.state === "conflict");
+  if (conflicts.length === 0) {
+    banner.classList.remove("open");
+    return;
+  }
+  banner.textContent = conflicts.length + " write" +
+    (conflicts.length > 1 ? "s" : "") + " conflicted (" +
+    conflicts.map(o => o.path).join(", ") +
+    ") — kept in the queue, not lost. Open the sync chip to retry.";
+  banner.classList.add("open");
+}
+
+document.getElementById("sync-chip").addEventListener("click", () => {
+  document.getElementById("sync-panel").classList.toggle("open");
+  renderQueuePanel();
+});
+
+document.getElementById("queue-retry").addEventListener("click", () => {
+  const ops = queueOps();
+  for (const op of ops) { op.state = "pending"; op.nextAt = 0; op.attempts = 0; }
+  saveQueue(ops);
+  renderConflictBanner(); updateChip();
+  flushQueue();
+});
+
+document.getElementById("reload-data").addEventListener("click", () => loadData());
+
+/* people.json lives in the data repo, read/written via the same API path.
+   Doubles as the demonstrable test write for the wifi-kill acceptance test. */
+document.getElementById("person-add").addEventListener("click", () => {
+  const input = document.getElementById("person-input");
+  const name = input.value.trim();
+  if (!name) return;
+  if (store.people.includes(name)) { input.value = ""; return; }
+  const next = [...store.people, name];
+  enqueueWrite("people.json", JSON.stringify(next, null, 2) + "\n",
+               "add person " + name);
+  input.value = "";
+});
+
+window.addEventListener("online",  () => { netDown = false; updateChip(); flushQueue(); });
+window.addEventListener("offline", () => updateChip());
+
+/* Belt-and-suspenders flush for wifi that dies without an offline event. */
+setInterval(() => {
+  if (queueOps().some(o => o.state === "pending")) flushQueue();
+}, 15000);
+
+/* ---- Boot ---- */
+
+async function boot() {
+  reauthShown = false;
+  updateChip(); renderQueuePanel(); renderConflictBanner();
+  await loadData();
+  flushQueue();
+}
+
+if (getAuth() && getAuth().token) {
+  boot();
+} else {
+  ingest(loadCache()); // cached data renders even before auth
+  showAuthModal();
 }
 </script>
 
