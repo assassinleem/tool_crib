@@ -3020,41 +3020,43 @@ async function readToolsFile(file) {
   return { version: json.version ?? null, data };
 }
 
-/* ---- Normalizing a Fusion tool into a library record ---- */
+/* ---- Library records: raw verbatim, everything else derived -------------
+   A record stores the incoming Fusion tool object UNMODIFIED, as `raw`.
+   That is the export copy: Fusion's own keys — expressions, setup, shaft,
+   GRADE, last_modified, reference_guid, and whatever a future Fusion adds —
+   round-trip untouched because nothing whitelists them. Handing Fusion back
+   a tool stripped of its shaft profile or turning setup is not an option.
 
-const GEOM_KEYS   = ["DC", "NOF", "LCF", "OAL", "RE", "SFDM",   // milling
-                     "SC", "INSD", "S", "TC", "RA"];            // turning
-const HOLDER_KEYS  = ["W", "H", "LH", "OAL", "HAND", "MTP", "THSC",
-                      "tool_roundShank"];
-const PRESET_KEYS  = ["name", "v_c", "f_n", "f_z", "n", "v_f"];
+   Everything the app shows, searches or matches on is DERIVED from raw at
+   read time (deriveLib below). Derived values are never written into raw and
+   are never the source for an export. App-added keys live outside raw; the
+   `_`-prefix escape hatch exists for anything that must sit inside it, and
+   rawForExport() strips those on the way out.
 
-/* The fields the import owns. Everything else on a record (links, notes,
-   comments — Phase 3 and 4) is ours and survives a re-import untouched. */
-const FUSION_FIELDS = ["type", "kind", "description", "vendor", "product_id",
-  "product_link", "unit", "bmc", "post_number", "geometry", "holder",
-  "holder_hash", "presets"];
+   Numbers are never rounded, reformatted or unit-normalized anywhere in
+   this pipeline: JSON.parse/stringify round-trips IEEE doubles exactly, so
+   3.649606299212598 comes back out as it went in. Units are per-tool (one
+   library holds both inches and millimeters); comparisons convert, storage
+   never does. ------------------------------------------------------------ */
 
-function pluck(src, keys) {
-  const out = {};
-  if (!src || typeof src !== "object") return out;
-  for (const k of keys) {
-    if (src[k] !== undefined && src[k] !== null && src[k] !== "") out[k] = src[k];
-  }
-  return out;
+const HOLDER_KEYS = ["W", "H", "LH", "OAL", "HAND", "MTP", "THSC",
+                     "tool_roundShank"];
+const PRESET_KEYS = ["name", "v_c", "f_n", "f_z", "n", "v_f"];
+
+/* Locally-created tools get their own namespace so they can never collide
+   with a Fusion guid, and so the import can leave them strictly alone. */
+const LOCAL_PREFIX = "local-";
+function isLocalLibId(id) { return String(id).startsWith(LOCAL_PREFIX); }
+function newLocalLibId() { return LOCAL_PREFIX + crypto.randomUUID(); }
+
+function isPlainObject(v) {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
 }
-
-/* Turning first: "turning general" also contains no "mill", but the drill
-   family shares words with everything, so order the tests widest-last. */
-function kindOfType(type) {
-  const t = String(type || "").toLowerCase();
-  if (t.includes("turning") || t.includes("groov") || t.includes("thread turn")) return "turning";
-  if (t.includes("mill")) return "milling";
-  if (/drill|tap|ream|counter|bore|centre|center/.test(t)) return "hole";
-  return "other";
-}
+function obj(v) { return isPlainObject(v) ? v : {}; }
+function str(v) { return typeof v === "string" ? v : (v == null ? "" : String(v)); }
 
 /* Stable stringify: sorted keys at every level, so two objects that differ
-   only in key order hash the same. Phase 3 groups holders on this. */
+   only in key order hash the same. Holder grouping runs on this. */
 function stableStringify(v) {
   if (v === null || typeof v !== "object") return JSON.stringify(v ?? null);
   if (Array.isArray(v)) return "[" + v.map(stableStringify).join(",") + "]";
@@ -3064,106 +3066,215 @@ function stableStringify(v) {
 
 /* FNV-1a. Not a security hash — it only has to group identical holder
    blocks without collisions across a few hundred tools. */
-function hashString(str) {
+function hashString(s) {
   let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
     h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
   }
   return h.toString(16).padStart(8, "0");
 }
 
-function normalizePresets(raw) {
-  const sv = raw["start-values"];
-  const list = sv && Array.isArray(sv.presets) ? sv.presets : [];
-  return list.map(p => {
-    const out = pluck(p, PRESET_KEYS);
-    if (p["tool-coolant"] !== undefined) out.coolant = p["tool-coolant"];
-    if (p.material !== undefined && p.material !== null) out.material = p.material;
-    return out;
-  });
+/* Turning first: "turning general" contains no "mill", but the hole-making
+   words show up everywhere, so the widest test goes last. */
+function kindOfType(type) {
+  const t = String(type || "").toLowerCase();
+  if (t.includes("turning") || t.includes("groov") || t.includes("thread turn")) return "turning";
+  if (t.includes("mill")) return "milling";
+  if (/drill|tap|ream|counter|bore|centre|center/.test(t)) return "hole";
+  return "other";
 }
 
-/* Locally-created tools get their own namespace so they can never collide
-   with a Fusion guid, and so the import can leave them strictly alone. */
-const LOCAL_PREFIX = "local-";
-function isLocalLibId(id) { return String(id).startsWith(LOCAL_PREFIX); }
-function newLocalLibId() { return LOCAL_PREFIX + crypto.randomUUID(); }
+function unitIsMm(unit) { return /^mm$|millim/i.test(String(unit || "")); }
 
-function normalizeFusionTool(raw) {
-  if (!raw || typeof raw !== "object") return null;
+/* For comparison and sorting only. The stored value keeps its own unit. */
+function toInches(v, unit) {
+  const n = typeof v === "number" ? v : parseFloat(v);
+  if (!isFinite(n)) return null;
+  return unitIsMm(unit) ? n / 25.4 : n;
+}
+
+function looksNumeric(v) {
+  if (typeof v === "number") return isFinite(v);
+  if (typeof v === "string" && v.trim() !== "") return isFinite(Number(v));
+  return false;
+}
+
+/* Fields the app reads as numbers. A library in the wild will put junk in
+   any of them; that is a flag on the record, never a failed import. */
+const NUMERIC_PATHS = [
+  ["geometry", "DC"], ["geometry", "NOF"], ["geometry", "RE"],
+  ["geometry", "LCF"], ["geometry", "OAL"], ["geometry", "SFDM"],
+  ["geometry", "INSD"], ["geometry", "S"], ["geometry", "RA"],
+  ["holder", "W"], ["holder", "H"], ["holder", "LH"], ["holder", "OAL"]
+];
+
+/* The derived view. Every field is best-effort: a malformed value becomes an
+   entry in `issues` and the record still imports with its raw intact. */
+function deriveLib(rec) {
+  // Records written before raw-verbatim storage still render: fall back to
+  // reading the record itself. Re-importing the source file migrates them.
+  const raw = rec && isPlainObject(rec.raw) ? rec.raw : obj(rec);
+  const legacy = !(rec && isPlainObject(rec.raw));
+  const d = { raw, legacy, issues: [] };
+  try {
+    const g = obj(raw.geometry);
+    const h = obj(raw.holder);
+    d.type = str(raw.type);
+    d.kind = kindOfType(d.type);
+    d.description = str(raw.description);
+    d.vendor = str(raw.vendor);
+    d.product_id = str(raw["product-id"]);
+    d.product_link = str(raw["product-link"]);
+    d.unit = raw.unit == null ? null : raw.unit;   // never normalized
+    d.bmc = raw.BMC ?? null;
+    d.grade = raw.GRADE ?? null;
+    // Stored, never matched on: the T number is per-library and two
+    // libraries hand the same number to different tools inside a week.
+    d.post_number = obj(raw["post-process"]).number ?? null;
+    d.geometry = g;
+    d.holder = h;
+    d.dia = g.DC ?? null;                       // as stored, in d.unit
+    d.dia_in = toInches(g.DC, d.unit);          // for comparison only
+    d.flutes = g.NOF ?? null;
+    d.corner_radius = g.RE ?? null;
+    d.insert_shape = g.SC ?? null;
+    // Unit rides along in the hash: identical numbers in different units are
+    // not the same physical holder.
+    d.holder_hash = Object.keys(h).length
+      ? hashString(stableStringify({ unit: unitIsMm(d.unit) ? "mm" : "in", holder: h }))
+      : null;
+    const sv = obj(raw["start-values"]);
+    d.presets = (Array.isArray(sv.presets) ? sv.presets : []).map(p => {
+      const out = {};
+      for (const k of PRESET_KEYS) if (obj(p)[k] !== undefined) out[k] = p[k];
+      if (obj(p)["tool-coolant"] !== undefined) out.coolant = p["tool-coolant"];
+      if (obj(p).material != null) out.material = p.material;
+      return out;
+    });
+
+    for (const [a, b] of NUMERIC_PATHS) {
+      const v = obj(raw[a])[b];
+      if (v !== undefined && v !== null && v !== "" && !looksNumeric(v)) {
+        d.issues.push(`${a}.${b} is not a number (${shortVal(v)})`);
+      }
+    }
+    // Seen in the wild as the literal string "<NEW TOOL GUID>".
+    if (typeof raw.reference_guid === "string" && /[<>]/.test(raw.reference_guid)) {
+      d.issues.push("reference_guid is a placeholder (" + shortVal(raw.reference_guid) + ")");
+    }
+    if (raw.last_modified !== undefined && raw.last_modified !== null &&
+        !looksNumeric(raw.last_modified)) {
+      d.issues.push("last_modified is not a number");
+    }
+  } catch (e) {
+    // A derive that blows up must not cost the record: raw is already safe.
+    d.issues.push("could not be parsed for display (" + (e.message || e) + ")");
+  }
+  return d;
+}
+
+/* App-added keys never go inside raw, but if one ever does it carries a `_`
+   and gets stripped here rather than being handed back to Fusion. */
+function rawForExport(rec) {
+  const raw = rec && isPlainObject(rec.raw) ? rec.raw : obj(rec);
+  const out = {};
+  for (const k of Object.keys(raw)) if (!k.startsWith("_")) out[k] = raw[k];
+  return out;
+}
+
+/* Rebuilds the file Fusion reads: the envelope version is whatever came in
+   with that library, never a hardcoded number. */
+function buildToolsFile(records, version) {
+  return { version: version ?? null, data: records.map(rawForExport) };
+}
+
+/* Says, in words, why a record has no usable identity. */
+function guidProblem(raw) {
+  if (!isPlainObject(raw)) return "not a tool object";
+  const g = raw.guid;
+  if (typeof g !== "string" || !g.trim()) return "no guid";
+  if (/[<>]/.test(g)) return "placeholder guid (" + shortVal(g) + ")";
+  if (isLocalLibId(g.trim())) return "guid claims the reserved local- prefix";
+  return "unusable guid";
+}
+
+function libRecordFromRaw(raw) {
+  if (!isPlainObject(raw)) return null;
   const guid = typeof raw.guid === "string" ? raw.guid.trim() : "";
-  if (!guid || isLocalLibId(guid)) return null;
-
-  const holder = pluck(raw.holder, HOLDER_KEYS);
-  const post = raw["post-process"];
-  const rec = {
-    guid,
-    type: raw.type || "",
-    kind: kindOfType(raw.type),
-    description: raw.description || "",
-    vendor: raw.vendor || "",
-    product_id: raw["product-id"] || "",
-    product_link: raw["product-link"] || "",
-    unit: raw.unit || "",
-    bmc: raw.BMC ?? null,
-    // Stored because the post needs it, never matched on: the T number is
-    // per-library and two libraries will hand the same number to different
-    // tools inside a week.
-    post_number: post && post.number !== undefined ? post.number : null,
-    geometry: pluck(raw.geometry, GEOM_KEYS),
-    holder,
-    holder_hash: Object.keys(holder).length ? hashString(stableStringify(holder)) : null,
-    presets: normalizePresets(raw)
-  };
-  return rec;
+  // A placeholder guid is not an identity; taking one would merge unrelated
+  // tools onto a single record.
+  if (!guid || isLocalLibId(guid) || /[<>]/.test(guid)) return null;
+  return { guid, raw };
 }
 
 /* ---- Diff against what is already in library.json ---- */
 
-function fusionSlice(rec) {
-  const out = {};
-  for (const k of FUSION_FIELDS) out[k] = rec[k] ?? null;
-  return out;
-}
+const DIFF_PATH_CAP = 200;
 
-function changedFields(before, after) {
-  const changed = [];
-  for (const k of FUSION_FIELDS) {
-    if (stableStringify(before[k] ?? null) !== stableStringify(after[k] ?? null)) {
-      changed.push(k);
+/* Recurses plain objects; arrays and scalars compare whole, which keeps
+   paths readable ("start-values.presets" rather than 40 index paths). */
+function diffRawPaths(before, after, prefix, out) {
+  out = out || [];
+  prefix = prefix || "";
+  if (out.length >= DIFF_PATH_CAP) return out;
+  const keys = new Set([...Object.keys(obj(before)), ...Object.keys(obj(after))]);
+  for (const k of [...keys].sort()) {
+    if (k.startsWith("_")) continue;
+    const a = obj(before)[k], b = obj(after)[k];
+    const path = prefix ? prefix + "." + k : k;
+    if (isPlainObject(a) && isPlainObject(b)) { diffRawPaths(a, b, path, out); continue; }
+    if (stableStringify(a ?? null) !== stableStringify(b ?? null)) {
+      out.push({ path, from: a, to: b });
+      if (out.length >= DIFF_PATH_CAP) return out;
     }
   }
-  return changed;
+  return out;
 }
 
 function diffLibrary(parsed) {
   const seen = new Set();
-  const create = [], update = [], archive = [];
-  let unchanged = 0, skipped = 0;
+  const create = [], update = [], archive = [], skip = [];
+  let unchanged = 0, flagged = 0;
 
   for (const raw of parsed.data) {
-    const rec = normalizeFusionTool(raw);
-    if (!rec) { skipped++; continue; }
-    if (seen.has(rec.guid)) { skipped++; continue; } // dupe guid in one file
+    let rec = null;
+    try { rec = libRecordFromRaw(raw); }
+    catch { rec = null; }
+    // No usable guid means no identity to key on: importing it would merge
+    // unrelated tools onto one record. Listed in the preview, never silent.
+    if (!rec) {
+      skip.push({ raw: obj(raw), reason: guidProblem(raw) });
+      continue;
+    }
+    if (seen.has(rec.guid)) {
+      skip.push({ raw: rec.raw, reason: "a second tool in this file claims guid " + rec.guid });
+      continue;
+    }
     seen.add(rec.guid);
 
-    const existing = store.library[rec.guid];
-    if (!existing) { create.push({ rec }); continue; }
+    const derived = deriveLib(rec);
+    if (derived.issues.length) flagged++;
 
-    const fields = changedFields(fusionSlice(existing), rec);
-    if (fields.length === 0 && !existing.archived) { unchanged++; continue; }
-    update.push({ rec, existing, fields, revived: !!existing.archived });
+    const existing = store.library[rec.guid];
+    if (!existing) { create.push({ rec, derived }); continue; }
+
+    const legacy = !isPlainObject(existing.raw);
+    const paths = legacy ? [] : diffRawPaths(existing.raw, rec.raw);
+    if (!legacy && paths.length === 0 && !existing.archived) { unchanged++; continue; }
+    update.push({ rec, derived, existing, paths, legacy,
+                  revived: !!existing.archived });
   }
 
   for (const [guid, existing] of Object.entries(store.library)) {
     // A local record is not Fusion's to archive, and a guid Fusion already
-    // dropped once stays archived without being re-reported every import.
+    // dropped stays archived without being re-reported every import.
     if (isLocalLibId(guid) || existing.archived || seen.has(guid)) continue;
     archive.push({ guid, existing });
   }
 
-  return { create, update, archive, unchanged, skipped, seen };
+  return { create, update, archive, skip, unchanged,
+           skipped: skip.length, flagged, seen };
 }
 
 /* ---- Preview + confirm ---- */
@@ -3177,13 +3288,19 @@ function setImportStatus(msg, isError) {
 }
 
 function libDesc(rec) {
-  return rec.description || rec.product_id || rec.type || rec.guid;
+  const d = deriveLib(rec);
+  return d.description || d.product_id || d.type || rec.guid || "(unnamed)";
 }
 
 function shortVal(v) {
   if (v === null || v === undefined || v === "") return "—";
   const s = typeof v === "object" ? stableStringify(v) : String(v);
   return s.length > 60 ? s.slice(0, 57) + "…" : s;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>]/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
 }
 
 function renderLibrarySummary() {
@@ -3197,15 +3314,29 @@ function renderLibrarySummary() {
   const active = recs.filter(r => !r.archived);
   const archived = recs.length - active.length;
   const local = recs.filter(r => isLocalLibId(r.guid || "")).length;
+  const legacy = recs.filter(r => !isLocalLibId(r.guid || "") &&
+                                  !isPlainObject(r.raw)).length;
   const last = recs.map(r => r.last_import).filter(Boolean).sort().pop();
+  const newest = recs.filter(r => r.last_import === last)[0];
   const bits = [`<strong>${active.length}</strong> active tools`];
   if (archived) bits.push(`<strong>${archived}</strong> archived`);
   if (local) bits.push(`<strong>${local}</strong> local (not from Fusion)`);
-  el.innerHTML = bits.join(" · ") +
-    (last ? ` · last import ${last.slice(0, 10)}` : "");
+  let tail = "";
+  if (last) {
+    tail = ` · last import ${last.slice(0, 10)}`;
+    if (newest && newest.import_file) tail += " from " + esc(newest.import_file);
+    if (newest && newest.import_version != null) {
+      tail += " (library version " + esc(newest.import_version) + ")";
+    }
+  }
+  el.innerHTML = bits.join(" · ") + tail + (legacy
+    ? ` · <strong>${legacy}</strong> stored before full-record import —` +
+      " re-import their source file to complete them"
+    : "");
 }
 
 const PREVIEW_CAP = 400;
+const PATHS_SHOWN = 8;
 
 function renderImportPreview() {
   const host = document.getElementById("import-preview");
@@ -3222,6 +3353,7 @@ function renderImportPreview() {
     ["",     d.unchanged,      "unchanged"]
   ];
   if (d.skipped) cells.push(["", d.skipped, "skipped"]);
+  if (d.flagged) cells.push(["", d.flagged, "flagged"]);
   for (const [cls, n, label] of cells) {
     const c = document.createElement("div");
     c.className = "stat " + cls;
@@ -3231,11 +3363,17 @@ function renderImportPreview() {
   host.appendChild(stats);
 
   const rows = [
-    ...d.create.map(c  => ({ cls: "new",  tag: "new",      rec: c.rec, sub: null })),
+    ...d.create.map(c  => ({ cls: "new",  tag: "new", rec: c.rec,
+                             derived: c.derived, chg: null })),
     ...d.update.map(u  => ({ cls: "upd",  tag: u.revived ? "back" : "updated",
-                             rec: u.rec, sub: u })),
-    ...d.archive.map(a => ({ cls: "arch", tag: "archive",  rec: { ...a.existing, guid: a.guid },
-                             sub: null, note: "not in this file" }))
+                             rec: u.rec, derived: u.derived, chg: u })),
+    ...d.skip.map(s    => ({ cls: "skip", tag: "skipped",
+                             rec: { raw: s.raw }, derived: deriveLib({ raw: s.raw }),
+                             chg: null, note: "not imported — " + s.reason })),
+    ...d.archive.map(a => ({ cls: "arch", tag: "archive",
+                             rec: { ...a.existing, guid: a.guid },
+                             derived: deriveLib(a.existing), chg: null,
+                             note: "not in this file" }))
   ];
 
   const list = document.createElement("div");
@@ -3259,18 +3397,29 @@ function renderImportPreview() {
 
     const sub = document.createElement("div");
     sub.className = "sub";
-    if (row.sub && row.sub.fields.length) {
-      const parts = row.sub.fields.map(f =>
-        `${f}: <span class="was">${shortVal(row.sub.existing[f])}</span> → ` +
-        `<span class="now">${shortVal(row.sub.rec[f])}</span>`);
-      if (row.sub.revived) parts.unshift('<span class="now">back in the library</span>');
-      sub.innerHTML = parts.join(" · ");
-    } else if (row.sub && row.sub.revived) {
-      sub.innerHTML = '<span class="now">back in the library</span>';
-    } else {
-      sub.textContent = [row.note, row.rec.type, row.rec.vendor,
-                         row.rec.product_id].filter(Boolean).join(" · ");
+    const parts = [];
+    if (row.chg && row.chg.revived) parts.push('<span class="now">back in the library</span>');
+    if (row.chg && row.chg.legacy) {
+      parts.push('<span class="now">stored in full — every Fusion field kept</span>');
     }
+    if (row.chg && row.chg.paths.length) {
+      for (const p of row.chg.paths.slice(0, PATHS_SHOWN)) {
+        parts.push(`${esc(p.path)}: <span class="was">${esc(shortVal(p.from))}</span> → ` +
+          `<span class="now">${esc(shortVal(p.to))}</span>`);
+      }
+      if (row.chg.paths.length > PATHS_SHOWN) {
+        parts.push(`+ ${row.chg.paths.length - PATHS_SHOWN} more fields`);
+      }
+    }
+    if (!parts.length) {
+      parts.push(esc([row.note, row.derived.type, row.derived.vendor,
+        row.derived.product_id].filter(Boolean).join(" · ")));
+    }
+    // A record with a junk value still imports, raw and all — it just says so.
+    for (const issue of (row.derived.issues || [])) {
+      parts.push('<span class="was">imported, unparsed field — ' + esc(issue) + "</span>");
+    }
+    sub.innerHTML = parts.filter(Boolean).join(" · ");
     body.appendChild(sub);
     el.appendChild(tag);
     el.appendChild(body);
@@ -3287,12 +3436,13 @@ function renderImportPreview() {
 
   const actions = document.createElement("div");
   actions.className = "import-actions";
+  const writes = d.create.length + d.update.length + d.archive.length;
   const confirm = document.createElement("button");
   confirm.type = "button";
   confirm.className = "btn-small";
-  confirm.textContent = "Import " + (rows.length || "nothing");
-  confirm.disabled = rows.length === 0;
-  if (rows.length === 0) confirm.style.opacity = "0.5";
+  confirm.textContent = "Import " + (writes || "nothing");
+  confirm.disabled = writes === 0;
+  if (writes === 0) confirm.style.opacity = "0.5";
   confirm.addEventListener("click", commitImport);
   const cancel = document.createElement("button");
   cancel.type = "button";
@@ -3328,11 +3478,13 @@ async function handleImportFile(file) {
 
   importState.file = file;
   importState.parsed = parsed;
-  importState.diff = diffLibrary(parsed);
+  try { importState.diff = diffLibrary(parsed); }
+  catch (e) { setImportStatus("Couldn't read that library: " + e.message, true); return; }
   const d = importState.diff;
   setImportStatus(`${file.name} — ${parsed.data.length} tools read` +
     (parsed.version !== null ? `, library version ${parsed.version}` : "") +
-    (d.skipped ? `, ${d.skipped} skipped (no usable guid)` : ""));
+    (d.skipped ? `, ${d.skipped} skipped (no usable guid)` : "") +
+    (d.flagged ? `, ${d.flagged} with a field that wouldn't parse` : ""));
   renderImportPreview();
 }
 
@@ -3344,20 +3496,27 @@ function commitImport() {
 
   const now = new Date().toISOString();
   const by = authName();
+  // The envelope version travels with the records that came out of it, so an
+  // export can hand Fusion back the version that library actually declared.
+  const version = importState.parsed ? importState.parsed.version : null;
+  const stamp = {
+    last_import: now, imported_by: by,
+    import_file: file.name, import_version: version
+  };
   const patch = {};
 
   for (const { rec } of d.create) {
     patch[rec.guid] = {
-      ...rec, source: "fusion", archived: false,
-      first_seen: now, last_import: now, imported_by: by,
-      import_file: file.name
+      guid: rec.guid, raw: rec.raw, source: "fusion", archived: false,
+      first_seen: now, ...stamp
     };
   }
   for (const { rec, existing } of d.update) {
+    // Fusion owns `raw`; everything else the app hung on the record (links,
+    // comments, notes) rides through the re-import untouched.
     patch[rec.guid] = {
-      ...existing, ...rec, source: "fusion", archived: false,
-      archived_at: null, last_import: now, imported_by: by,
-      import_file: file.name
+      ...existing, guid: rec.guid, raw: rec.raw, source: "fusion",
+      archived: false, archived_at: null, ...stamp
     };
   }
   for (const { guid, existing } of d.archive) {
