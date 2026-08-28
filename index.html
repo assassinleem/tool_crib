@@ -699,6 +699,92 @@
 
   .sync-panel .panel-hint { font-size: 12px; color: var(--text-2); margin-top: 8px; }
 
+  /* ---- Library import ---- */
+
+  .drop-zone {
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    padding: 28px 20px;
+    text-align: center;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: border-color 120ms, background 120ms;
+  }
+
+  .drop-zone:hover, .drop-zone.dragging {
+    border-color: var(--accent);
+    background: var(--surface-2);
+  }
+
+  .drop-zone strong { color: var(--text); display: block; margin-bottom: 4px; }
+  .drop-zone .dz-hint { font-size: 13px; }
+
+  .import-status { margin-top: 12px; font-size: 13px; color: var(--text-2); }
+  .import-status.error { color: var(--low); }
+
+  .stat-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 4px; }
+
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 14px;
+    min-width: 92px;
+  }
+
+  .stat .n { font-size: 20px; font-weight: 700; line-height: 1.1; }
+  .stat .k { font-size: 12px; color: var(--text-2); }
+  .stat.new  .n { color: var(--ok); }
+  .stat.upd  .n { color: var(--warn); }
+  .stat.arch .n { color: var(--low); }
+
+  .change-list {
+    margin-top: 14px;
+    max-height: 46vh;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+  }
+
+  .change {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+  }
+
+  .change:last-child { border-bottom: none; }
+
+  .change .tag {
+    flex: none;
+    width: 62px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .change.new  .tag { color: var(--ok); }
+  .change.upd  .tag { color: var(--warn); }
+  .change.arch .tag { color: var(--low); }
+  .change.skip .tag { color: var(--text-2); }
+
+  .change .body { min-width: 0; flex: 1; }
+  .change .title { overflow-wrap: anywhere; }
+  .change .sub { font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
+  .change .sub .was { text-decoration: line-through; }
+  .change .sub .now { color: var(--text); }
+  .change-more { padding: 8px 12px; font-size: 12px; color: var(--text-2); }
+
+  .import-actions { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+  .import-actions .spacer { flex: 1; }
+
+  .lib-summary { font-size: 13px; color: var(--text-2); margin-bottom: 14px; }
+  .lib-summary strong { color: var(--text); font-weight: 600; }
+
   /* ---- Conflict banner ---- */
 
   .conflict-banner {
@@ -797,6 +883,7 @@
     <nav class="nav" aria-label="Main">
       <button class="nav-btn" data-screen="crib">Crib</button>
       <button class="nav-btn" data-screen="add">Add Tools</button>
+      <button class="nav-btn" data-screen="import">Import Library</button>
       <button class="nav-btn" data-screen="tagout">Tag-Out</button>
       <button class="nav-btn" data-screen="ordering">Needs Ordering</button>
       <button class="nav-btn" data-screen="log">Log</button>
@@ -827,6 +914,18 @@
       <div id="add-picker"></div>
       <div id="add-form"></div>
       <div class="session-list" id="session-list"></div>
+    </section>
+
+    <section class="screen" id="screen-import">
+      <h1>Import Library</h1>
+      <div class="lib-summary" id="lib-summary"></div>
+      <div class="drop-zone" id="import-drop">
+        <strong>Drop a Fusion .tools file here</strong>
+        <div class="dz-hint">or click to pick one — zipped or bare JSON, both work</div>
+      </div>
+      <input type="file" id="import-file" accept=".tools,.json,application/json,application/zip" hidden>
+      <div class="import-status" id="import-status"></div>
+      <div id="import-preview"></div>
     </section>
 
     <section class="screen" id="screen-tagout">
@@ -915,7 +1014,7 @@
 <script>
 "use strict";
 
-const SCREENS = ["crib", "add", "tagout", "ordering", "log"];
+const SCREENS = ["crib", "add", "import", "tagout", "ordering", "log"];
 const DEFAULT_SCREEN = "crib";
 
 function showScreen(name) {
@@ -979,7 +1078,13 @@ const BACKOFF_BASE_MS = 2000;
 const BACKOFF_CAP_MS  = 60000;
 
 /* In-memory store, rebuilt from the cache on every load. */
-const store = { items: {}, tagouts: {}, logEvents: {}, people: [], loaded: false };
+const LIB_FILE = "library.json";
+
+const store = {
+  items: {}, tagouts: {}, logEvents: {}, people: [],
+  library: {},   // Fusion library, keyed by guid (LIB_FILE)
+  loaded: false
+};
 
 function lsGet(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
@@ -1233,10 +1338,12 @@ async function loadData() {
 
 function ingest(cache) {
   store.items = {}; store.tagouts = {}; store.logEvents = {}; store.people = [];
+  store.library = {};
   for (const [path, file] of Object.entries(cache.files)) {
     let data;
     try { data = JSON.parse(file.text); } catch { continue; }
-    if (path === "people.json")            store.people = data;
+    if (path === LIB_FILE)                 store.library = data || {};
+    else if (path === "people.json")       store.people = data;
     else if (path.startsWith("items/"))    store.items[data.id] = data;
     else if (path.startsWith("tagouts/"))  store.tagouts[data.id] = data;
     else if (path.startsWith("log/"))      store.logEvents[path] = data;
@@ -1247,6 +1354,7 @@ function ingest(cache) {
   renderCrib();
   updateChip();
   renderIdentity();
+  renderLibrarySummary();
 }
 
 /* renderCrib lives in the Crib module further down (function declarations
@@ -1309,7 +1417,8 @@ function enqueueItemWrite(path, content, summary) {
 function applyOptimistic(op) {
   let data;
   try { data = JSON.parse(op.content); } catch { return; }
-  if (op.path === "people.json")           { store.people = data; renderPeopleDatalist(); }
+  if (op.path === LIB_FILE)                { store.library = data || {}; renderLibrarySummary(); }
+  else if (op.path === "people.json")      { store.people = data; renderPeopleDatalist(); }
   else if (op.path.startsWith("items/"))   store.items[data.id] = data;
   else if (op.path.startsWith("tagouts/")) store.tagouts[data.id] = data;
   else if (op.path.startsWith("log/"))     store.logEvents[op.path] = data;
@@ -2836,6 +2945,467 @@ if (window.CATEGORIES) {
   buildCribChips();
   renderCrib();
 }
+
+/* ================= Fusion library import (build step 5) =================
+   A .tools file is a ZIP holding one tools.json — except when it isn't,
+   because some libraries export the JSON bare. Sniff the first two bytes
+   for "PK" and branch. The parsed record set is keyed by Fusion's `guid`,
+   which survives edits in Fusion and is therefore the only usable primary
+   key; `post-process.number` (the T number) looks like an ID and is not —
+   it is per-library and collides constantly.
+
+   Nothing is written until the operator confirms the preview. The whole
+   import lands as ONE commit against library.json. ------------------- */
+
+const FFLATE_SRCS = [
+  "https://cdnjs.cloudflare.com/ajax/libs/fflate/0.8.2/umd/index.js",
+  "https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"
+];
+
+let fflatePromise = null;
+
+/* Loaded on demand, not at boot: the CDN is unreachable from half the shop
+   floor, and only the import path needs it. */
+function loadFflate() {
+  if (window.fflate) return Promise.resolve(window.fflate);
+  if (fflatePromise) return fflatePromise;
+  fflatePromise = FFLATE_SRCS.reduce(
+    (chain, src) => chain.catch(() => new Promise((resolve, reject) => {
+      const el = document.createElement("script");
+      el.src = src;
+      el.onload = () => window.fflate ? resolve(window.fflate)
+                                      : reject(new Error("fflate absent"));
+      el.onerror = () => reject(new Error("script blocked: " + src));
+      document.head.appendChild(el);
+    })),
+    Promise.reject(new Error("start"))
+  ).catch(e => { fflatePromise = null; throw e; });
+  return fflatePromise;
+}
+
+async function readToolsFile(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  if (buf.length === 0) throw new Error("That file is empty.");
+
+  let text;
+  if (buf[0] === 0x50 && buf[1] === 0x4b) {          // "PK" — a ZIP
+    let fflate;
+    try { fflate = await loadFflate(); }
+    catch {
+      throw new Error("Couldn't load the unzip library (no internet?). " +
+        "Unzip the .tools file yourself and drop the tools.json inside it.");
+    }
+    let entries;
+    try { entries = fflate.unzipSync(buf); }
+    catch { throw new Error("That looks like a ZIP but wouldn't unzip."); }
+    const names = Object.keys(entries);
+    const name = names.find(n => n.toLowerCase().endsWith("tools.json"))
+              || names.find(n => n.toLowerCase().endsWith(".json"));
+    if (!name) {
+      throw new Error("No tools.json inside that archive (found: " +
+        (names.join(", ") || "nothing") + ").");
+    }
+    text = fflate.strFromU8(entries[name]);
+  } else {
+    text = new TextDecoder().decode(buf);
+  }
+
+  let json;
+  try { json = JSON.parse(text); }
+  catch { throw new Error("That file isn't a Fusion library — it wouldn't parse as JSON."); }
+  const data = Array.isArray(json) ? json : json.data;
+  if (!Array.isArray(data)) {
+    throw new Error("No tool list in that file (expected a `data` array).");
+  }
+  return { version: json.version ?? null, data };
+}
+
+/* ---- Normalizing a Fusion tool into a library record ---- */
+
+const GEOM_KEYS   = ["DC", "NOF", "LCF", "OAL", "RE", "SFDM",   // milling
+                     "SC", "INSD", "S", "TC", "RA"];            // turning
+const HOLDER_KEYS  = ["W", "H", "LH", "OAL", "HAND", "MTP", "THSC",
+                      "tool_roundShank"];
+const PRESET_KEYS  = ["name", "v_c", "f_n", "f_z", "n", "v_f"];
+
+/* The fields the import owns. Everything else on a record (links, notes,
+   comments — Phase 3 and 4) is ours and survives a re-import untouched. */
+const FUSION_FIELDS = ["type", "kind", "description", "vendor", "product_id",
+  "product_link", "unit", "bmc", "post_number", "geometry", "holder",
+  "holder_hash", "presets"];
+
+function pluck(src, keys) {
+  const out = {};
+  if (!src || typeof src !== "object") return out;
+  for (const k of keys) {
+    if (src[k] !== undefined && src[k] !== null && src[k] !== "") out[k] = src[k];
+  }
+  return out;
+}
+
+/* Turning first: "turning general" also contains no "mill", but the drill
+   family shares words with everything, so order the tests widest-last. */
+function kindOfType(type) {
+  const t = String(type || "").toLowerCase();
+  if (t.includes("turning") || t.includes("groov") || t.includes("thread turn")) return "turning";
+  if (t.includes("mill")) return "milling";
+  if (/drill|tap|ream|counter|bore|centre|center/.test(t)) return "hole";
+  return "other";
+}
+
+/* Stable stringify: sorted keys at every level, so two objects that differ
+   only in key order hash the same. Phase 3 groups holders on this. */
+function stableStringify(v) {
+  if (v === null || typeof v !== "object") return JSON.stringify(v ?? null);
+  if (Array.isArray(v)) return "[" + v.map(stableStringify).join(",") + "]";
+  return "{" + Object.keys(v).sort()
+    .map(k => JSON.stringify(k) + ":" + stableStringify(v[k])).join(",") + "}";
+}
+
+/* FNV-1a. Not a security hash — it only has to group identical holder
+   blocks without collisions across a few hundred tools. */
+function hashString(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+function normalizePresets(raw) {
+  const sv = raw["start-values"];
+  const list = sv && Array.isArray(sv.presets) ? sv.presets : [];
+  return list.map(p => {
+    const out = pluck(p, PRESET_KEYS);
+    if (p["tool-coolant"] !== undefined) out.coolant = p["tool-coolant"];
+    if (p.material !== undefined && p.material !== null) out.material = p.material;
+    return out;
+  });
+}
+
+/* Locally-created tools get their own namespace so they can never collide
+   with a Fusion guid, and so the import can leave them strictly alone. */
+const LOCAL_PREFIX = "local-";
+function isLocalLibId(id) { return String(id).startsWith(LOCAL_PREFIX); }
+function newLocalLibId() { return LOCAL_PREFIX + crypto.randomUUID(); }
+
+function normalizeFusionTool(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const guid = typeof raw.guid === "string" ? raw.guid.trim() : "";
+  if (!guid || isLocalLibId(guid)) return null;
+
+  const holder = pluck(raw.holder, HOLDER_KEYS);
+  const post = raw["post-process"];
+  const rec = {
+    guid,
+    type: raw.type || "",
+    kind: kindOfType(raw.type),
+    description: raw.description || "",
+    vendor: raw.vendor || "",
+    product_id: raw["product-id"] || "",
+    product_link: raw["product-link"] || "",
+    unit: raw.unit || "",
+    bmc: raw.BMC ?? null,
+    // Stored because the post needs it, never matched on: the T number is
+    // per-library and two libraries will hand the same number to different
+    // tools inside a week.
+    post_number: post && post.number !== undefined ? post.number : null,
+    geometry: pluck(raw.geometry, GEOM_KEYS),
+    holder,
+    holder_hash: Object.keys(holder).length ? hashString(stableStringify(holder)) : null,
+    presets: normalizePresets(raw)
+  };
+  return rec;
+}
+
+/* ---- Diff against what is already in library.json ---- */
+
+function fusionSlice(rec) {
+  const out = {};
+  for (const k of FUSION_FIELDS) out[k] = rec[k] ?? null;
+  return out;
+}
+
+function changedFields(before, after) {
+  const changed = [];
+  for (const k of FUSION_FIELDS) {
+    if (stableStringify(before[k] ?? null) !== stableStringify(after[k] ?? null)) {
+      changed.push(k);
+    }
+  }
+  return changed;
+}
+
+function diffLibrary(parsed) {
+  const seen = new Set();
+  const create = [], update = [], archive = [];
+  let unchanged = 0, skipped = 0;
+
+  for (const raw of parsed.data) {
+    const rec = normalizeFusionTool(raw);
+    if (!rec) { skipped++; continue; }
+    if (seen.has(rec.guid)) { skipped++; continue; } // dupe guid in one file
+    seen.add(rec.guid);
+
+    const existing = store.library[rec.guid];
+    if (!existing) { create.push({ rec }); continue; }
+
+    const fields = changedFields(fusionSlice(existing), rec);
+    if (fields.length === 0 && !existing.archived) { unchanged++; continue; }
+    update.push({ rec, existing, fields, revived: !!existing.archived });
+  }
+
+  for (const [guid, existing] of Object.entries(store.library)) {
+    // A local record is not Fusion's to archive, and a guid Fusion already
+    // dropped once stays archived without being re-reported every import.
+    if (isLocalLibId(guid) || existing.archived || seen.has(guid)) continue;
+    archive.push({ guid, existing });
+  }
+
+  return { create, update, archive, unchanged, skipped, seen };
+}
+
+/* ---- Preview + confirm ---- */
+
+const importState = { file: null, parsed: null, diff: null };
+
+function setImportStatus(msg, isError) {
+  const el = document.getElementById("import-status");
+  el.textContent = msg || "";
+  el.classList.toggle("error", !!isError);
+}
+
+function libDesc(rec) {
+  return rec.description || rec.product_id || rec.type || rec.guid;
+}
+
+function shortVal(v) {
+  if (v === null || v === undefined || v === "") return "—";
+  const s = typeof v === "object" ? stableStringify(v) : String(v);
+  return s.length > 60 ? s.slice(0, 57) + "…" : s;
+}
+
+function renderLibrarySummary() {
+  const el = document.getElementById("lib-summary");
+  if (!el) return;
+  const recs = Object.values(store.library);
+  if (!recs.length) {
+    el.textContent = "No library imported yet.";
+    return;
+  }
+  const active = recs.filter(r => !r.archived);
+  const archived = recs.length - active.length;
+  const local = recs.filter(r => isLocalLibId(r.guid || "")).length;
+  const last = recs.map(r => r.last_import).filter(Boolean).sort().pop();
+  const bits = [`<strong>${active.length}</strong> active tools`];
+  if (archived) bits.push(`<strong>${archived}</strong> archived`);
+  if (local) bits.push(`<strong>${local}</strong> local (not from Fusion)`);
+  el.innerHTML = bits.join(" · ") +
+    (last ? ` · last import ${last.slice(0, 10)}` : "");
+}
+
+const PREVIEW_CAP = 400;
+
+function renderImportPreview() {
+  const host = document.getElementById("import-preview");
+  host.innerHTML = "";
+  const d = importState.diff;
+  if (!d) return;
+
+  const stats = document.createElement("div");
+  stats.className = "stat-row";
+  const cells = [
+    ["new",  d.create.length,  "new"],
+    ["upd",  d.update.length,  "updated"],
+    ["arch", d.archive.length, "archived"],
+    ["",     d.unchanged,      "unchanged"]
+  ];
+  if (d.skipped) cells.push(["", d.skipped, "skipped"]);
+  for (const [cls, n, label] of cells) {
+    const c = document.createElement("div");
+    c.className = "stat " + cls;
+    c.innerHTML = `<div class="n">${n}</div><div class="k">${label}</div>`;
+    stats.appendChild(c);
+  }
+  host.appendChild(stats);
+
+  const rows = [
+    ...d.create.map(c  => ({ cls: "new",  tag: "new",      rec: c.rec, sub: null })),
+    ...d.update.map(u  => ({ cls: "upd",  tag: u.revived ? "back" : "updated",
+                             rec: u.rec, sub: u })),
+    ...d.archive.map(a => ({ cls: "arch", tag: "archive",  rec: { ...a.existing, guid: a.guid },
+                             sub: null, note: "not in this file" }))
+  ];
+
+  const list = document.createElement("div");
+  list.className = "change-list";
+  if (!rows.length) {
+    list.innerHTML = '<div class="change-more">Nothing would change — this ' +
+      'library matches what is already stored.</div>';
+  }
+  for (const row of rows.slice(0, PREVIEW_CAP)) {
+    const el = document.createElement("div");
+    el.className = "change " + row.cls;
+    const tag = document.createElement("div");
+    tag.className = "tag";
+    tag.textContent = row.tag;
+    const body = document.createElement("div");
+    body.className = "body";
+    const title = document.createElement("div");
+    title.className = "title";
+    title.textContent = libDesc(row.rec);
+    body.appendChild(title);
+
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    if (row.sub && row.sub.fields.length) {
+      const parts = row.sub.fields.map(f =>
+        `${f}: <span class="was">${shortVal(row.sub.existing[f])}</span> → ` +
+        `<span class="now">${shortVal(row.sub.rec[f])}</span>`);
+      if (row.sub.revived) parts.unshift('<span class="now">back in the library</span>');
+      sub.innerHTML = parts.join(" · ");
+    } else if (row.sub && row.sub.revived) {
+      sub.innerHTML = '<span class="now">back in the library</span>';
+    } else {
+      sub.textContent = [row.note, row.rec.type, row.rec.vendor,
+                         row.rec.product_id].filter(Boolean).join(" · ");
+    }
+    body.appendChild(sub);
+    el.appendChild(tag);
+    el.appendChild(body);
+    list.appendChild(el);
+  }
+  if (rows.length > PREVIEW_CAP) {
+    const more = document.createElement("div");
+    more.className = "change-more";
+    more.textContent = `+ ${rows.length - PREVIEW_CAP} more not listed — all of ` +
+      "them are included in the import.";
+    list.appendChild(more);
+  }
+  host.appendChild(list);
+
+  const actions = document.createElement("div");
+  actions.className = "import-actions";
+  const confirm = document.createElement("button");
+  confirm.type = "button";
+  confirm.className = "btn-small";
+  confirm.textContent = "Import " + (rows.length || "nothing");
+  confirm.disabled = rows.length === 0;
+  if (rows.length === 0) confirm.style.opacity = "0.5";
+  confirm.addEventListener("click", commitImport);
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "btn-ghost";
+  cancel.textContent = "Cancel";
+  cancel.addEventListener("click", resetImport);
+  const hint = document.createElement("div");
+  hint.className = "panel-hint";
+  hint.style.margin = "0";
+  hint.textContent = "One commit, nothing written until you press import.";
+  actions.appendChild(confirm);
+  actions.appendChild(cancel);
+  actions.appendChild(hint);
+  host.appendChild(actions);
+}
+
+function resetImport() {
+  importState.file = null;
+  importState.parsed = null;
+  importState.diff = null;
+  document.getElementById("import-preview").innerHTML = "";
+  document.getElementById("import-file").value = "";
+  setImportStatus("");
+}
+
+async function handleImportFile(file) {
+  resetImport();
+  if (!file) return;
+  setImportStatus("Reading " + file.name + "…");
+  let parsed;
+  try { parsed = await readToolsFile(file); }
+  catch (e) { setImportStatus(e.message, true); return; }
+
+  importState.file = file;
+  importState.parsed = parsed;
+  importState.diff = diffLibrary(parsed);
+  const d = importState.diff;
+  setImportStatus(`${file.name} — ${parsed.data.length} tools read` +
+    (parsed.version !== null ? `, library version ${parsed.version}` : "") +
+    (d.skipped ? `, ${d.skipped} skipped (no usable guid)` : ""));
+  renderImportPreview();
+}
+
+function commitImport() {
+  const d = importState.diff;
+  const file = importState.file;
+  if (!d || !file) return;
+  if (!requireIdentity(commitImport)) return;
+
+  const now = new Date().toISOString();
+  const by = authName();
+  const patch = {};
+
+  for (const { rec } of d.create) {
+    patch[rec.guid] = {
+      ...rec, source: "fusion", archived: false,
+      first_seen: now, last_import: now, imported_by: by,
+      import_file: file.name
+    };
+  }
+  for (const { rec, existing } of d.update) {
+    patch[rec.guid] = {
+      ...existing, ...rec, source: "fusion", archived: false,
+      archived_at: null, last_import: now, imported_by: by,
+      import_file: file.name
+    };
+  }
+  for (const { guid, existing } of d.archive) {
+    // Archive, never delete: comments, links and history stay attached.
+    patch[guid] = {
+      ...existing, guid, archived: true, archived_at: now, archived_by: by,
+      archived_reason: "absent from " + file.name
+    };
+  }
+
+  const next = { ...store.library, ...patch };
+  // The patch doubles as the 409 merge payload: library.json is keyed by
+  // guid, so re-applying just the touched guids onto a freshly fetched file
+  // keeps whatever the other writer changed under a guid we didn't touch.
+  const ok = enqueueWrite(LIB_FILE, JSON.stringify(next, null, 2) + "\n",
+    "import library: " + file.name, patch);
+  if (!ok) return;
+
+  const n = d.create.length + d.update.length + d.archive.length;
+  resetImport();
+  setImportStatus(`Imported ${file.name}: ${d.create.length} new, ` +
+    `${d.update.length} updated, ${d.archive.length} archived ` +
+    `(${n} records queued in one commit).`);
+}
+
+/* ---- Drop zone wiring ---- */
+
+const dropZone = document.getElementById("import-drop");
+const importFileInput = document.getElementById("import-file");
+
+dropZone.addEventListener("click", () => importFileInput.click());
+importFileInput.addEventListener("change", () => {
+  handleImportFile(importFileInput.files[0]);
+});
+for (const ev of ["dragenter", "dragover"]) {
+  dropZone.addEventListener(ev, e => {
+    e.preventDefault();
+    dropZone.classList.add("dragging");
+  });
+}
+for (const ev of ["dragleave", "drop"]) {
+  dropZone.addEventListener(ev, () => dropZone.classList.remove("dragging"));
+}
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  const f = e.dataTransfer && e.dataTransfer.files[0];
+  if (f) handleImportFile(f);
+});
 
 /* ---- Boot ---- */
 
