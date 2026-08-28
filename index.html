@@ -855,6 +855,14 @@
 </button>
 
 <div class="sync-panel" id="sync-panel">
+  <h3>Your name</h3>
+  <div class="panel-row">
+    <input id="identity-input" list="people-list" autocomplete="off"
+           placeholder="Your name">
+    <button type="button" class="btn-small" id="identity-save">Save</button>
+  </div>
+  <div class="panel-hint" id="identity-hint"></div>
+
   <h3>Write queue</h3>
   <div class="queue-list" id="queue-list"></div>
   <div class="panel-row">
@@ -869,14 +877,32 @@
   repo — the simplest real write for testing the queue.</div>
 </div>
 
+<datalist id="people-list"></datalist>
+
+<div class="modal-overlay" id="identity-modal">
+  <div class="modal">
+    <h2>Who's making this change?</h2>
+    <div class="modal-note">Everyone shares one GitHub account, so git
+    authorship is useless. This name is the real attribution: it goes in the
+    commit message and in the body of every log event. Pick a name off the
+    list or type your own.</div>
+    <label for="identity-name">Your name</label>
+    <input id="identity-name" list="people-list" autocomplete="off"
+           placeholder="frank">
+    <div class="modal-error" id="identity-error"></div>
+    <button type="button" class="btn-primary" id="identity-modal-save">Save &amp; continue</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="auth-modal">
   <div class="modal">
     <h2>Connect to the data repo</h2>
-    <div class="modal-note">Name goes in commit messages. The token needs
-    Contents read/write on the data repo (fine-grained or classic — both
-    work). Both stay in this browser's localStorage only.</div>
-    <label for="auth-name">Display name</label>
-    <input id="auth-name" autocomplete="off" placeholder="leem">
+    <div class="modal-note">Your name goes in every commit message and log
+    event — one shared GitHub account means git authorship tells us nothing.
+    The token needs Contents read/write on the data repo (fine-grained or
+    classic — both work). Both stay in this browser's localStorage only.</div>
+    <label for="auth-name">Your name</label>
+    <input id="auth-name" list="people-list" autocomplete="off" placeholder="leem">
     <label for="auth-token">GitHub token</label>
     <input id="auth-token" type="password" autocomplete="off"
            placeholder="github_pat_… or ghp_…">
@@ -996,13 +1022,16 @@ function showAuthModal(errorMsg) {
 document.getElementById("auth-save").addEventListener("click", () => {
   const name = document.getElementById("auth-name").value.trim();
   const token = document.getElementById("auth-token").value.trim();
-  if (!name || !token) {
-    showAuthModal("Both fields are required.");
+  if (!token) {
+    showAuthModal("A token is required to reach the data repo.");
     return;
   }
+  // Name is not required to READ. It is required to write, and the write
+  // paths prompt for it, so a nameless token still gets you a live table.
   lsSet(LS_AUTH, { name, token });
   document.getElementById("auth-token").value = "";
   document.getElementById("auth-modal").classList.remove("open");
+  renderIdentity();
   boot();
 });
 
@@ -1014,11 +1043,106 @@ function handleAuthFailure(status) {
   if (auth) lsSet(LS_AUTH, { name: auth.name, token: "" });
   // 403 = token recognized but under-scoped (wrong Contents level or repo);
   // retrying can never fix it, so the queue pauses until a new token lands.
-  showAuthModal(status === 403
-    ? "GitHub said 403 Forbidden — the token works but lacks permission. " +
-      "It needs Contents: Read and write on tool_crib_data. " +
-      "Queued writes are kept and resume with the new token."
-    : "GitHub said 401 — token invalid or expired. Paste a fresh one; queued writes are kept.");
+  showAuthModal("Access expired — see Leem." + (status === 403
+    ? " (403: the token works but lacks Contents: Read and write on the data" +
+      " repo.) Queued writes are kept and resume with a new token."
+    : " (401: the token is invalid or expired.) Queued writes are kept and" +
+      " resume with a new token."));
+}
+
+/* ---- Identity ------------------------------------------------------------
+   One shared GitHub bot account writes every commit, so git authorship is
+   noise. This name is the attribution: it rides the commit message, the
+   log-event body, and updated_by. No name means no writes — every write
+   path funnels through requireIdentity() first, and enqueueWrite() backstops
+   it so nothing can slip past a missed call site. ------------------------ */
+
+function authName() {
+  const auth = getAuth();
+  return auth && auth.name ? auth.name.trim() : "";
+}
+
+function hasIdentity() { return authName() !== ""; }
+
+function setIdentity(name) {
+  const auth = getAuth() || { name: "", token: "" };
+  lsSet(LS_AUTH, { ...auth, name: name.trim() });
+  renderIdentity();
+}
+
+let identityPending = null; // action to resume once a name lands
+
+/* Returns true when a name is on file. Otherwise it opens the prompt and
+   returns false — callers must bail without mutating anything. Pass the
+   action as `resume` and it re-runs after the name is saved. */
+function requireIdentity(resume) {
+  if (hasIdentity()) return true;
+  identityPending = resume || null;
+  const err = document.getElementById("identity-error");
+  err.textContent = "";
+  err.style.display = "none";
+  document.getElementById("identity-name").value = "";
+  document.getElementById("identity-modal").classList.add("open");
+  setTimeout(() => document.getElementById("identity-name").focus(), 0);
+  return false;
+}
+
+function saveIdentityFromModal() {
+  const name = document.getElementById("identity-name").value.trim();
+  if (!name) {
+    const err = document.getElementById("identity-error");
+    err.textContent = "A name is required before anything can be written.";
+    err.style.display = "block";
+    return;
+  }
+  setIdentity(name);
+  document.getElementById("identity-modal").classList.remove("open");
+  const resume = identityPending;
+  identityPending = null;
+  if (resume) resume();
+}
+
+document.getElementById("identity-modal-save")
+  .addEventListener("click", saveIdentityFromModal);
+document.getElementById("identity-name").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); saveIdentityFromModal(); }
+});
+
+document.getElementById("identity-save").addEventListener("click", () => {
+  const input = document.getElementById("identity-input");
+  const name = input.value.trim();
+  if (!name) return;
+  setIdentity(name);
+});
+document.getElementById("identity-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    document.getElementById("identity-save").click();
+  }
+});
+
+/* The borrower list doubles as the suggestion list — free-typed names still
+   go through, the datalist only saves typing for the regulars. */
+function renderPeopleDatalist() {
+  const dl = document.getElementById("people-list");
+  dl.innerHTML = "";
+  for (const name of store.people) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    dl.appendChild(opt);
+  }
+}
+
+function renderIdentity() {
+  renderPeopleDatalist();
+  const input = document.getElementById("identity-input");
+  const hint = document.getElementById("identity-hint");
+  if (document.activeElement !== input) input.value = authName();
+  hint.textContent = hasIdentity()
+    ? "Every commit and log event is signed " + authName() + "."
+    : "Set a name before writing — commits and log events are signed with it.";
+  const authNameEl = document.getElementById("auth-name");
+  if (document.activeElement !== authNameEl) authNameEl.value = authName();
 }
 
 /* ---- API wrapper. Fine-grained and classic PATs both go out as Bearer. ---- */
@@ -1122,6 +1246,7 @@ function ingest(cache) {
   store.loaded = cache.treeSha !== null;
   renderCrib();
   updateChip();
+  renderIdentity();
 }
 
 /* renderCrib lives in the Crib module further down (function declarations
@@ -1144,9 +1269,10 @@ let flushing = false;
 let flushTimer = null;
 
 function enqueueWrite(path, content, summary, patch) {
+  if (!requireIdentity()) return false;
   const ops = queueOps();
   ops.push({
-    id: crypto.randomUUID(), path, content, summary,
+    id: crypto.randomUUID(), path, content, summary, author: authName(),
     patch: patch || null, attempts: 0, state: "pending", nextAt: 0,
     lastError: null, rev: 0
   });
@@ -1154,6 +1280,7 @@ function enqueueWrite(path, content, summary, patch) {
   applyOptimistic(ops[ops.length - 1]);
   renderCrib(); updateChip(); renderQueuePanel(); renderSessionList();
   flushQueue();
+  return true;
 }
 
 /* Survey-mode recommit: a correction to a record whose op is still pending
@@ -1161,11 +1288,13 @@ function enqueueWrite(path, content, summary, patch) {
    file. rev++ tells flushQueue a coalesce landed mid-flight, so a PUT of
    the stale content completes without dropping the newer one. */
 function enqueueItemWrite(path, content, summary) {
+  if (!requireIdentity()) return false;
   const ops = queueOps();
   const existing = ops.find(o => o.path === path && o.state === "pending");
-  if (!existing) { enqueueWrite(path, content, summary); return; }
+  if (!existing) return enqueueWrite(path, content, summary);
   existing.content = content;
   existing.summary = summary;
+  existing.author = authName();
   existing.attempts = 0;
   existing.nextAt = 0;
   existing.lastError = null;
@@ -1174,20 +1303,22 @@ function enqueueItemWrite(path, content, summary) {
   applyOptimistic(existing);
   renderCrib(); updateChip(); renderQueuePanel(); renderSessionList();
   flushQueue();
+  return true;
 }
 
 function applyOptimistic(op) {
   let data;
   try { data = JSON.parse(op.content); } catch { return; }
-  if (op.path === "people.json")           store.people = data;
+  if (op.path === "people.json")           { store.people = data; renderPeopleDatalist(); }
   else if (op.path.startsWith("items/"))   store.items[data.id] = data;
   else if (op.path.startsWith("tagouts/")) store.tagouts[data.id] = data;
   else if (op.path.startsWith("log/"))     store.logEvents[op.path] = data;
 }
 
+/* "update qty: 1/2 EM (Frank)" — the name is the only real authorship
+   signal, since every commit is authored by the same bot account. */
 function commitMessage(op) {
-  const auth = getAuth();
-  return (auth && auth.name ? auth.name : "unknown") + ": " + op.summary;
+  return op.summary + " (" + (op.author || authName() || "unknown") + ")";
 }
 
 async function fetchFileFresh(path) {
@@ -1405,8 +1536,8 @@ document.getElementById("person-add").addEventListener("click", () => {
   if (!name) return;
   if (store.people.includes(name)) { input.value = ""; return; }
   const next = [...store.people, name];
-  enqueueWrite("people.json", JSON.stringify(next, null, 2) + "\n",
-               "add person " + name);
+  if (!enqueueWrite("people.json", JSON.stringify(next, null, 2) + "\n",
+                    "add person " + name)) return;
   input.value = "";
 });
 
@@ -1909,6 +2040,7 @@ function markBadField(root, key) {
 
 function commitRecord() {
   if (!survey.family) return;
+  if (!requireIdentity(commitRecord)) return;
   const fam = survey.family;
   const { fields, badKey } = resolveFieldValues(currentSchema(), survey.values);
   if (badKey) { markBadField(formEl, badKey); return; }
@@ -1929,7 +2061,6 @@ function commitRecord() {
     id = nextId(fam.prefix); // §2.4: retry on collision (other user got there first)
   }
 
-  const auth = getAuth();
   const base = editingId ? (store.items[editingId] || {}) : {};
   const item = {
     mfr_part_number: "", vendor: "", order_url: "",
@@ -1945,7 +2076,7 @@ function commitRecord() {
     qty_on_hand: parseInt(survey.qty, 10) || 0,
     min_qty: parseInt(survey.minQty, 10) || 0,
     updated_at: new Date().toISOString(),
-    updated_by: auth && auth.name ? auth.name : "unknown"
+    updated_by: authName()
   };
 
   // An ID change during a correction is only legal while the original op is
@@ -2112,11 +2243,6 @@ const cribEmpty  = document.getElementById("crib-empty");
 const cribSearch = document.getElementById("crib-search");
 const drawerEl   = document.getElementById("drawer");
 
-function authName() {
-  const auth = getAuth();
-  return auth && auth.name ? auth.name : "unknown";
-}
-
 function famOf(item)  { return CATEGORIES.families.find(f => f.key === item.family); }
 function typeOf(item) { const f = famOf(item); return f && f.types.find(t => t.key === item.type); }
 
@@ -2136,7 +2262,10 @@ function isLow(item) {
   return item.consumable && !item.archived && item.qty_on_hand <= item.min_qty;
 }
 
+/* `user` is the identity name from settings, not the GitHub account — the
+   account is the same bot for everyone, so it identifies nobody. */
 function writeLogEvent(ev) {
+  if (!requireIdentity()) return;
   const full = {
     ts: new Date().toISOString(), user: authName(),
     item_id: ev.item_id, type: ev.type, delta: ev.delta,
@@ -2156,6 +2285,7 @@ const qtyEdits = {}; // item id -> { from, timer }
 function setQty(id, newQty, immediate) {
   const item = store.items[id];
   if (!item) return;
+  if (!requireIdentity(() => setQty(id, newQty, immediate))) return;
   newQty = Math.max(0, Math.floor(newQty));
   if (!(id in qtyEdits)) qtyEdits[id] = { from: item.qty_on_hand, timer: null };
   item.qty_on_hand = newQty;
@@ -2332,6 +2462,7 @@ function renderCrib() {
 function startInlineQty(cell, id) {
   const item = store.items[id];
   if (!item || cell.querySelector("input")) return;
+  if (!requireIdentity()) return;
   cell.textContent = "";
   const input = document.createElement("input");
   input.value = item.qty_on_hand;
@@ -2645,6 +2776,7 @@ function defaultSubstrate(fam) {
 function saveDrawer() {
   const item = store.items[drawerState.id];
   if (!item || !drawerState.fam || !drawerState.type) return;
+  if (!requireIdentity(saveDrawer)) return;
   const schema = resolveSchema(drawerState.fam, drawerState.type);
   const { fields, badKey } = resolveFieldValues(schema, drawerState.values);
   if (badKey) { markBadField(drawerEl, badKey); return; }
@@ -2679,6 +2811,7 @@ function saveDrawer() {
 function setArchived(id, archived) {
   const item = store.items[id];
   if (!item) return;
+  if (!requireIdentity(() => setArchived(id, archived))) return;
   const updated = {
     ...item, archived,
     updated_at: new Date().toISOString(),
