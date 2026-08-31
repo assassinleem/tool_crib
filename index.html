@@ -782,8 +782,165 @@
   .import-actions { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
   .import-actions .spacer { flex: 1; }
 
+  .lib-id-label { font-size: 12px; color: var(--text-2); }
+
+  .lib-id-input {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 13px;
+    width: 220px;
+  }
+
   .lib-summary { font-size: 13px; color: var(--text-2); margin-bottom: 14px; }
   .lib-summary strong { color: var(--text); font-weight: 600; }
+
+  /* ---- Reconcile workbench ---- */
+
+  .recon-note {
+    background: #2a2118;
+    border: 1px solid var(--warn);
+    color: var(--warn);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .recon-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-top: 12px;
+  }
+
+  .recon-card.first { border-color: var(--accent); }
+
+  .recon-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .recon-title { font-weight: 600; }
+  .recon-sub { font-size: 12px; color: var(--text-2); margin-top: 3px; }
+  .recon-sub.none { color: var(--warn); }
+
+  .badge.multi, .badge.same {
+    background: var(--surface-2);
+    color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+  .badge.same { color: var(--warn); border-color: var(--warn); }
+  .badge.lib { background: var(--surface-2); color: var(--text-2); }
+
+  .cand {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 6px 8px;
+    margin-top: 6px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  .cand:hover { background: var(--surface-2); }
+  .cand.on { border-color: var(--accent); background: var(--surface-2); }
+
+  .cand-key {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    text-align: center;
+    font-size: 11px;
+    border-radius: 3px;
+    background: var(--surface-2);
+    color: var(--text-2);
+  }
+
+  .cand-id { font-family: ui-monospace, monospace; flex: none; }
+  .cand-desc { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .cand-conf { font-size: 12px; color: var(--text-2); text-align: right; }
+  .cand-conf.high { color: var(--ok); }
+  .cand-conf.medium { color: var(--warn); }
+
+  .recon-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .bulk-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 13px;
+  }
+
+  .cmp { margin-top: 10px; }
+
+  .cmp-row {
+    display: grid;
+    grid-template-columns: 130px 1fr 1fr;
+    gap: 8px;
+    align-items: stretch;
+    margin-top: 6px;
+  }
+
+  .cmp-label { font-size: 12px; color: var(--text-2); align-self: center; }
+
+  .cmp-side {
+    text-align: left;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px 8px;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  .cmp-side:hover { background: var(--surface-2); }
+  .cmp-side.on { border-color: var(--accent); background: var(--surface-2); }
+
+  .cmp-tag {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .fusion-list { font-size: 13px; }
+
+  .fusion-rec {
+    border-top: 1px solid var(--border);
+    padding: 8px 0;
+  }
+
+  .fusion-rec:first-child { border-top: none; }
+  .fusion-rec .lib-name { color: var(--text-2); font-size: 12px; }
+
+  .preset-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    padding: 4px 0;
+    border-top: 1px dashed var(--border);
+  }
+
+  .preset-row .pname { font-weight: 600; min-width: 140px; }
+  .preset-row .psrc { color: var(--text-2); }
+  .preset-row.conflict .pname { color: var(--warn); }
 
   /* ---- Conflict banner ---- */
 
@@ -884,6 +1041,7 @@
       <button class="nav-btn" data-screen="crib">Crib</button>
       <button class="nav-btn" data-screen="add">Add Tools</button>
       <button class="nav-btn" data-screen="import">Import Library</button>
+      <button class="nav-btn" data-screen="reconcile">Reconcile</button>
       <button class="nav-btn" data-screen="tagout">Tag-Out</button>
       <button class="nav-btn" data-screen="ordering">Needs Ordering</button>
       <button class="nav-btn" data-screen="log">Log</button>
@@ -926,6 +1084,13 @@
       <input type="file" id="import-file" accept=".tools,.json,application/json,application/zip" hidden>
       <div class="import-status" id="import-status"></div>
       <div id="import-preview"></div>
+    </section>
+
+    <section class="screen" id="screen-reconcile">
+      <h1>Reconcile</h1>
+      <div class="lib-summary" id="reconcile-head"></div>
+      <div class="chip-row" id="reconcile-tabs"></div>
+      <div id="reconcile-body"></div>
     </section>
 
     <section class="screen" id="screen-tagout">
@@ -977,6 +1142,7 @@
 </div>
 
 <datalist id="people-list"></datalist>
+<datalist id="library-id-list"></datalist>
 
 <div class="modal-overlay" id="identity-modal">
   <div class="modal">
@@ -1014,7 +1180,7 @@
 <script>
 "use strict";
 
-const SCREENS = ["crib", "add", "import", "tagout", "ordering", "log"];
+const SCREENS = ["crib", "add", "import", "reconcile", "tagout", "ordering", "log"];
 const DEFAULT_SCREEN = "crib";
 
 function showScreen(name) {
@@ -1342,7 +1508,7 @@ function ingest(cache) {
   for (const [path, file] of Object.entries(cache.files)) {
     let data;
     try { data = JSON.parse(file.text); } catch { continue; }
-    if (path === LIB_FILE)                 store.library = data || {};
+    if (path === LIB_FILE)                 store.library = migrateLibrary(data);
     else if (path === "people.json")       store.people = data;
     else if (path.startsWith("items/"))    store.items[data.id] = data;
     else if (path.startsWith("tagouts/"))  store.tagouts[data.id] = data;
@@ -1354,7 +1520,7 @@ function ingest(cache) {
   renderCrib();
   updateChip();
   renderIdentity();
-  renderLibrarySummary();
+  afterLibraryChange();
 }
 
 /* renderCrib lives in the Crib module further down (function declarations
@@ -1417,7 +1583,7 @@ function enqueueItemWrite(path, content, summary) {
 function applyOptimistic(op) {
   let data;
   try { data = JSON.parse(op.content); } catch { return; }
-  if (op.path === LIB_FILE)                { store.library = data || {}; renderLibrarySummary(); }
+  if (op.path === LIB_FILE)                { store.library = migrateLibrary(data); afterLibraryChange(); }
   else if (op.path === "people.json")      { store.people = data; renderPeopleDatalist(); }
   else if (op.path.startsWith("items/"))   store.items[data.id] = data;
   else if (op.path.startsWith("tagouts/")) store.tagouts[data.id] = data;
@@ -1480,6 +1646,15 @@ async function pushOp(op) {
       try {
         content = JSON.stringify(
           { ...JSON.parse(fresh.text), ...op.patch }, null, 2) + "\n";
+      } catch { /* remote unparsable — write ours whole */ }
+    }
+    if (op.path === LIB_FILE && op.patch && fresh) {
+      // library.json is a map; a null in the patch is a tombstone for a key
+      // this write removed (an old bare-guid record that has been re-keyed).
+      try {
+        const merged = { ...JSON.parse(fresh.text), ...op.patch };
+        for (const k of Object.keys(merged)) if (merged[k] === null) delete merged[k];
+        content = JSON.stringify(merged, null, 2) + "\n";
       } catch { /* remote unparsable — write ours whole */ }
     }
     res = await putFile(op.path, content, commitMessage(op),
@@ -2344,7 +2519,8 @@ if (window.CATEGORIES) {
    count cell, and a right-side detail drawer. Qty changes write a
    correction log event; git history is the undo system. */
 
-const cribFilter = { q: "", family: null, low: false, out: false, archived: false };
+const cribFilter = { q: "", family: null, low: false, out: false,
+                     archived: false, linked: false, unlinked: false };
 
 const cribTbody  = document.getElementById("crib-tbody");
 const cribTable  = document.getElementById("crib-table");
@@ -2368,7 +2544,8 @@ function qtyOut(itemId) {
 }
 
 function isLow(item) {
-  return item.consumable && !item.archived && item.qty_on_hand <= item.min_qty;
+  return item.consumable && !item.archived &&
+    typeof item.qty_on_hand === "number" && item.qty_on_hand <= item.min_qty;
 }
 
 /* `user` is the identity name from settings, not the GitHub account — the
@@ -2398,6 +2575,7 @@ function setQty(id, newQty, immediate) {
   newQty = Math.max(0, Math.floor(newQty));
   if (!(id in qtyEdits)) qtyEdits[id] = { from: item.qty_on_hand, timer: null };
   item.qty_on_hand = newQty;
+  item.needs_count = false;
   renderCrib();
   clearTimeout(qtyEdits[id].timer);
   if (immediate) commitQty(id);
@@ -2411,12 +2589,13 @@ function commitQty(id) {
   if (!edit || !item || item.qty_on_hand === edit.from) return;
   const updated = {
     ...item,
+    needs_count: false,
     updated_at: new Date().toISOString(),
     updated_by: authName()
   };
   enqueueItemWrite("items/" + id + ".json",
     JSON.stringify(updated, null, 2) + "\n",
-    id + " qty " + edit.from + "→" + item.qty_on_hand);
+    id + " qty " + (edit.from == null ? "—" : edit.from) + "→" + item.qty_on_hand);
   writeLogEvent({
     item_id: id, type: "correction",
     delta: item.qty_on_hand - edit.from, qty_after: item.qty_on_hand
@@ -2429,6 +2608,9 @@ function cribMatches(item) {
   if (item.archived && !cribFilter.archived) return false;
   if (cribFilter.family && item.family !== cribFilter.family) return false;
   if (cribFilter.low && !isLow(item)) return false;
+  if (cribFilter.linked && recordsForItem(item.id).length === 0) return false;
+  if (cribFilter.unlinked &&
+      (recordsForItem(item.id).length > 0 || item.no_fusion_equivalent)) return false;
   if (cribFilter.out && qtyOut(item.id) === 0) return false;
   const q = cribFilter.q.trim().toLowerCase();
   if (q) {
@@ -2455,6 +2637,10 @@ function buildCribChips() {
       () => { cribFilter.family = cribFilter.family === fam.key ? null : fam.key; });
   }
   mk("low stock", () => cribFilter.low, () => { cribFilter.low = !cribFilter.low; });
+  mk("linked", () => cribFilter.linked,
+    () => { cribFilter.linked = !cribFilter.linked; cribFilter.unlinked = false; });
+  mk("not linked", () => cribFilter.unlinked,
+    () => { cribFilter.unlinked = !cribFilter.unlinked; cribFilter.linked = false; });
   mk("out on tag-out", () => cribFilter.out, () => { cribFilter.out = !cribFilter.out; });
   mk("show archived", () => cribFilter.archived,
     () => { cribFilter.archived = !cribFilter.archived; });
@@ -2529,13 +2715,27 @@ function renderCrib() {
       b.className = "badge arch"; b.textContent = "archived";
       tdDesc.appendChild(b);
     }
+    const linkedCount = recordsForItem(item.id).length;
+    if (linkedCount) {
+      const b = document.createElement("span");
+      b.className = "badge lib";
+      b.textContent = linkedCount > 1 ? "Fusion ×" + linkedCount : "Fusion";
+      b.title = linkedCount + " linked library record" + (linkedCount > 1 ? "s" : "");
+      tdDesc.appendChild(b);
+    }
     tr.appendChild(tdDesc);
 
     const tdCount = document.createElement("td");
     tdCount.className = "count-cell";
-    const avail = item.qty_on_hand - qtyOut(item.id);
-    tdCount.textContent = avail + " / " + item.qty_on_hand;
-    tdCount.title = "Click to correct the on-hand count";
+    if (typeof item.qty_on_hand === "number") {
+      tdCount.textContent = (item.qty_on_hand - qtyOut(item.id)) + " / " + item.qty_on_hand;
+      tdCount.title = "Click to correct the on-hand count";
+    } else {
+      // Seeded from a library record and not counted yet — a guessed count
+      // is worse than an obviously missing one.
+      tdCount.textContent = "— / —";
+      tdCount.title = "Not counted yet — click to set the on-hand count";
+    }
     tdCount.addEventListener("click", e => {
       e.stopPropagation();
       startInlineQty(tdCount, item.id);
@@ -2574,7 +2774,7 @@ function startInlineQty(cell, id) {
   if (!requireIdentity()) return;
   cell.textContent = "";
   const input = document.createElement("input");
-  input.value = item.qty_on_hand;
+  input.value = typeof item.qty_on_hand === "number" ? item.qty_on_hand : "";
   input.inputMode = "numeric";
   cell.appendChild(input);
   input.focus();
@@ -2848,6 +3048,8 @@ function renderDrawer() {
     }
     drawerEl.appendChild(box);
   }
+
+  renderFusionSection(item);
 
   const actions = document.createElement("div");
   actions.className = "drawer-actions";
@@ -3175,11 +3377,20 @@ function deriveLib(rec) {
 }
 
 /* App-added keys never go inside raw, but if one ever does it carries a `_`
-   and gets stripped here rather than being handed back to Fusion. */
+   and gets stripped here rather than being handed back to Fusion.
+
+   The one thing export composes rather than copies is the preset array:
+   raw holds whatever the last import of this library happened to contain,
+   and rec.presets holds the union kept across every import. Handing Fusion
+   back the union is the entire point of merging them. */
 function rawForExport(rec) {
   const raw = rec && isPlainObject(rec.raw) ? rec.raw : obj(rec);
   const out = {};
   for (const k of Object.keys(raw)) if (!k.startsWith("_")) out[k] = raw[k];
+  const presets = Array.isArray(rec && rec.presets) ? rec.presets : null;
+  if (presets && isPlainObject(out["start-values"])) {
+    out["start-values"] = { ...out["start-values"], presets: presets.map(p => p.raw) };
+  }
   return out;
 }
 
@@ -3208,6 +3419,145 @@ function libRecordFromRaw(raw) {
   return { guid, raw };
 }
 
+/* ---- Library identity: library_id + guid -------------------------------
+   Fusion keeps a tool's guid when it is copied between libraries, so the
+   same guid shows up in a dozen files carrying different speeds and feeds.
+   Keying on guid alone means importing library 2 silently overwrites
+   library 1's presets and calls it an "update". The key is the pair. */
+
+/* Records written before the composite key are re-keyed on read, using the
+   library_id their import_file implies. Any write after that persists the
+   new keys; obsolete keys are tombstoned so the merge drops them. */
+let libraryObsoleteKeys = [];
+
+function migrateLibrary(data) {
+  libraryObsoleteKeys = [];
+  const out = {};
+  if (!isPlainObject(data)) return out;
+  for (const [key, rec] of Object.entries(data)) {
+    if (!isPlainObject(rec)) continue;   // null tombstone from a merged write
+    if (key.includes(LIB_KEY_SEP) || isLocalLibId(key)) {
+      out[key] = rec.presets ? rec : { ...rec, presets: rec.presets || [] };
+      continue;
+    }
+    const library_id = rec.library_id ||
+      String(rec.import_file || "library").replace(/\.[^.]+$/, "").trim() || "library";
+    const guid = rec.guid || key;
+    const next = libKey(library_id, guid);
+    out[next] = { ...rec, key: next, library_id, guid,
+                  presets: Array.isArray(rec.presets) ? rec.presets
+                    : rawPresets(rec.raw).map(pr => ({
+                        key: presetKey(pr), guid: isPlainObject(pr) && typeof pr.guid === "string" ? pr.guid : null,
+                        raw: pr, first_seen: rec.last_import || null,
+                        last_seen: { library: library_id, date: rec.last_import || null },
+                        history: [] })) };
+    libraryObsoleteKeys.push(key);
+  }
+  return out;
+}
+
+const LIB_KEY_SEP = "::";
+function libKey(libraryId, guid) { return libraryId + LIB_KEY_SEP + guid; }
+
+/* Derived from the file name, remembered per file so re-importing the same
+   file lands on the same library, and editable at import time. */
+function defaultLibraryId(fileName) {
+  for (const rec of Object.values(store.library)) {
+    if (rec && rec.import_file === fileName && rec.library_id) return rec.library_id;
+  }
+  return String(fileName).replace(/\.[^.]+$/, "").trim() || "library";
+}
+
+function libraryIds() {
+  const out = new Set();
+  for (const rec of Object.values(store.library)) if (rec && rec.library_id) out.add(rec.library_id);
+  return [...out].sort();
+}
+
+/* ---- Presets: union, never replace -------------------------------------
+   Fusion demonstrably loses presets between saves, and neither of two
+   overlapping libraries is a superset of the other. So an import adds and
+   updates preset entries and never removes one: a preset that stops
+   appearing keeps its last_seen and says so. Merge key is the preset guid,
+   which survives being copied between libraries. */
+
+function presetKey(p) {
+  const g = obj(p).guid;
+  if (typeof g === "string" && g.trim()) return g.trim();
+  const n = obj(p).name;
+  if (typeof n === "string" && n.trim()) return "name:" + n.trim().toLowerCase();
+  return "hash:" + hashString(stableStringify(p));
+}
+
+function presetName(entry) {
+  return str(obj(entry.raw).name) || entry.guid || "(unnamed preset)";
+}
+
+function mergePresets(existing, incoming, libraryId, now, by) {
+  const out = [];
+  const byKey = new Map();
+  for (const e of (Array.isArray(existing) ? existing : [])) {
+    const copy = { ...e, history: Array.isArray(e.history) ? e.history.slice() : [] };
+    byKey.set(copy.key, copy);
+    out.push(copy);
+  }
+  const added = [], changed = [], seen = new Set();
+
+  for (const p of (Array.isArray(incoming) ? incoming : [])) {
+    const key = presetKey(p);
+    seen.add(key);
+    const prev = byKey.get(key);
+    if (!prev) {
+      const entry = {
+        key, guid: typeof obj(p).guid === "string" ? p.guid : null,
+        raw: p, first_seen: now, last_seen: { library: libraryId, date: now },
+        history: []
+      };
+      byKey.set(key, entry);
+      out.push(entry);
+      added.push(entry);
+      continue;
+    }
+    prev.last_seen = { library: libraryId, date: now };
+    if (stableStringify(prev.raw) !== stableStringify(p)) {
+      // Keep the old values: a bad edit in Fusion has to be recoverable.
+      prev.history.push({ date: now, by, library: libraryId, prev: prev.raw });
+      prev.raw = p;
+      changed.push(prev);
+    }
+  }
+
+  // Present here, absent from the file. Informational, never a deletion.
+  const missing = out.filter(e => !seen.has(e.key));
+  return { presets: out, added, changed, missing };
+}
+
+/* Presets a crib item sees, collapsed by preset key across every linked
+   library record. One guid arriving from six libraries is one row with six
+   sources; two differently-named presets stay two rows. Where the same key
+   carries different values in different libraries, that is a conflict worth
+   showing rather than a value to pick. */
+function aggregatePresets(records) {
+  const rows = new Map();
+  for (const rec of records) {
+    for (const e of (Array.isArray(rec.presets) ? rec.presets : [])) {
+      let row = rows.get(e.key);
+      if (!row) {
+        row = { key: e.key, guid: e.guid, name: presetName(e), variants: [], sources: [] };
+        rows.set(e.key, row);
+      }
+      const lib = rec.library_id || "?";
+      row.sources.push({ library: lib, last_seen: (e.last_seen || {}).date || null });
+      const sig = stableStringify(e.raw);
+      const variant = row.variants.find(v => v.sig === sig);
+      if (variant) variant.libraries.push(lib);
+      else row.variants.push({ sig, raw: e.raw, libraries: [lib] });
+    }
+  }
+  for (const row of rows.values()) row.conflict = row.variants.length > 1;
+  return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /* ---- Diff against what is already in library.json ---- */
 
 const DIFF_PATH_CAP = 200;
@@ -3232,10 +3582,22 @@ function diffRawPaths(before, after, prefix, out) {
   return out;
 }
 
-function diffLibrary(parsed) {
+/* Preset churn is reported separately, so the raw path diff ignores it —
+   otherwise every import shouts about one array nobody can read. */
+function rawPathsIgnoringPresets(before, after) {
+  return diffRawPaths(before, after).filter(p => p.path !== "start-values.presets");
+}
+
+function rawPresets(raw) {
+  const sv = obj(obj(raw)["start-values"]);
+  return Array.isArray(sv.presets) ? sv.presets : [];
+}
+
+function diffLibrary(parsed, libraryId) {
   const seen = new Set();
-  const create = [], update = [], archive = [], skip = [];
+  const create = [], update = [], skip = [], stale = [];
   let unchanged = 0, flagged = 0;
+  const now = new Date().toISOString();
 
   for (const raw of parsed.data) {
     let rec = null;
@@ -3243,43 +3605,52 @@ function diffLibrary(parsed) {
     catch { rec = null; }
     // No usable guid means no identity to key on: importing it would merge
     // unrelated tools onto one record. Listed in the preview, never silent.
-    if (!rec) {
-      skip.push({ raw: obj(raw), reason: guidProblem(raw) });
+    if (!rec) { skip.push({ raw: obj(raw), reason: guidProblem(raw) }); continue; }
+    const key = libKey(libraryId, rec.guid);
+    if (seen.has(key)) {
+      skip.push({ raw: rec.raw,
+                  reason: "a second tool in this file claims guid " + rec.guid });
       continue;
     }
-    if (seen.has(rec.guid)) {
-      skip.push({ raw: rec.raw, reason: "a second tool in this file claims guid " + rec.guid });
-      continue;
-    }
-    seen.add(rec.guid);
+    seen.add(key);
 
     const derived = deriveLib(rec);
     if (derived.issues.length) flagged++;
 
-    const existing = store.library[rec.guid];
-    if (!existing) { create.push({ rec, derived }); continue; }
+    const existing = store.library[key];
+    const merge = mergePresets(existing && existing.presets, rawPresets(rec.raw),
+                               libraryId, now, "");
+    if (!existing) { create.push({ key, rec, derived, merge }); continue; }
 
     const legacy = !isPlainObject(existing.raw);
-    const paths = legacy ? [] : diffRawPaths(existing.raw, rec.raw);
-    if (!legacy && paths.length === 0 && !existing.archived) { unchanged++; continue; }
-    update.push({ rec, derived, existing, paths, legacy,
-                  revived: !!existing.archived });
+    const paths = legacy ? [] : rawPathsIgnoringPresets(existing.raw, rec.raw);
+    const presetChurn = merge.added.length + merge.changed.length;
+    if (!legacy && paths.length === 0 && presetChurn === 0 && !existing.stale_in_library) {
+      unchanged++;
+      continue;
+    }
+    update.push({ key, rec, derived, existing, paths, merge, legacy,
+                  revived: !!existing.stale_in_library });
   }
 
-  for (const [guid, existing] of Object.entries(store.library)) {
-    // A local record is not Fusion's to archive, and a guid Fusion already
-    // dropped stays archived without being re-reported every import.
-    if (isLocalLibId(guid) || existing.archived || seen.has(guid)) continue;
-    archive.push({ guid, existing });
+  // A guid that stops appearing in ITS OWN library is flagged and dated.
+  // It is never archived: with overlapping libraries, "absent from this
+  // file" says nothing about whether the tool exists. archived stays a
+  // human decision about a physical tool.
+  for (const [key, existing] of Object.entries(store.library)) {
+    if (!existing || isLocalLibId(key)) continue;
+    if (existing.library_id !== libraryId) continue;
+    if (seen.has(key) || existing.stale_in_library) continue;
+    stale.push({ key, existing });
   }
 
-  return { create, update, archive, skip, unchanged,
-           skipped: skip.length, flagged, seen };
+  return { create, update, skip, stale, unchanged,
+           skipped: skip.length, flagged, seen, libraryId, now };
 }
 
 /* ---- Preview + confirm ---- */
 
-const importState = { file: null, parsed: null, diff: null };
+const importState = { file: null, parsed: null, diff: null, libraryId: "" };
 
 function setImportStatus(msg, isError) {
   const el = document.getElementById("import-status");
@@ -3289,7 +3660,7 @@ function setImportStatus(msg, isError) {
 
 function libDesc(rec) {
   const d = deriveLib(rec);
-  return d.description || d.product_id || d.type || rec.guid || "(unnamed)";
+  return d.description || d.product_id || d.type || (rec && rec.guid) || "(unnamed)";
 }
 
 function shortVal(v) {
@@ -3307,32 +3678,25 @@ function renderLibrarySummary() {
   const el = document.getElementById("lib-summary");
   if (!el) return;
   const recs = Object.values(store.library);
-  if (!recs.length) {
-    el.textContent = "No library imported yet.";
-    return;
-  }
-  const active = recs.filter(r => !r.archived);
-  const archived = recs.length - active.length;
-  const local = recs.filter(r => isLocalLibId(r.guid || "")).length;
-  const legacy = recs.filter(r => !isLocalLibId(r.guid || "") &&
-                                  !isPlainObject(r.raw)).length;
-  const last = recs.map(r => r.last_import).filter(Boolean).sort().pop();
-  const newest = recs.filter(r => r.last_import === last)[0];
-  const bits = [`<strong>${active.length}</strong> active tools`];
-  if (archived) bits.push(`<strong>${archived}</strong> archived`);
-  if (local) bits.push(`<strong>${local}</strong> local (not from Fusion)`);
-  let tail = "";
-  if (last) {
-    tail = ` · last import ${last.slice(0, 10)}`;
-    if (newest && newest.import_file) tail += " from " + esc(newest.import_file);
-    if (newest && newest.import_version != null) {
-      tail += " (library version " + esc(newest.import_version) + ")";
-    }
-  }
-  el.innerHTML = bits.join(" · ") + tail + (legacy
-    ? ` · <strong>${legacy}</strong> stored before full-record import —` +
-      " re-import their source file to complete them"
-    : "");
+  if (!recs.length) { el.textContent = "No library imported yet."; return; }
+  const libs = libraryIds();
+  const stale = recs.filter(r => r.stale_in_library).length;
+  const unlinked = recs.filter(r => (r.link_state || "unlinked") === "unlinked").length;
+  const bits = [`<strong>${recs.length}</strong> library records`,
+                `<strong>${libs.length}</strong> ${libs.length === 1 ? "library" : "libraries"}`];
+  if (unlinked) bits.push(`<strong>${unlinked}</strong> to reconcile`);
+  if (stale) bits.push(`<strong>${stale}</strong> stale`);
+  el.innerHTML = bits.join(" · ") +
+    (libs.length ? '<br><span class="mono">' + esc(libs.join(", ")) + "</span>" : "");
+}
+
+/* Every surface that reads library.json, refreshed together. */
+function afterLibraryChange() {
+  renderLibrarySummary();
+  renderLibraryIdList();
+  buildCribChips();
+  renderCrib();
+  if (typeof renderReconcile === "function") renderReconcile();
 }
 
 const PREVIEW_CAP = 400;
@@ -3344,36 +3708,65 @@ function renderImportPreview() {
   const d = importState.diff;
   if (!d) return;
 
+  // Which library this file is. Editable, because file names drift and the
+  // library is the thing that owns the presets.
+  const idRow = document.createElement("div");
+  idRow.className = "import-actions";
+  idRow.innerHTML = '<label class="lib-id-label" for="import-library-id">Library</label>';
+  const idInput = document.createElement("input");
+  idInput.id = "import-library-id";
+  idInput.className = "lib-id-input";
+  idInput.value = importState.libraryId;
+  idInput.setAttribute("list", "library-id-list");
+  idInput.addEventListener("change", () => {
+    const v = idInput.value.trim();
+    if (!v || v === importState.libraryId) { idInput.value = importState.libraryId; return; }
+    importState.libraryId = v;
+    importState.diff = diffLibrary(importState.parsed, v);
+    renderImportPreview();
+  });
+  idRow.appendChild(idInput);
+  const idHint = document.createElement("div");
+  idHint.className = "panel-hint";
+  idHint.style.margin = "0";
+  idHint.textContent = "Presets are kept per library. The same tool in two " +
+    "libraries is two records, not an overwrite.";
+  idRow.appendChild(idHint);
+  host.appendChild(idRow);
+
   const stats = document.createElement("div");
   stats.className = "stat-row";
+  const presetAdds = [...d.create, ...d.update]
+    .reduce((n, r) => n + r.merge.added.length, 0);
+  const presetChanges = d.update.reduce((n, r) => n + r.merge.changed.length, 0);
   const cells = [
-    ["new",  d.create.length,  "new"],
-    ["upd",  d.update.length,  "updated"],
-    ["arch", d.archive.length, "archived"],
-    ["",     d.unchanged,      "unchanged"]
+    ["new",  d.create.length, "new"],
+    ["upd",  d.update.length, "updated"],
+    ["",     d.unchanged,     "unchanged"],
+    ["new",  presetAdds,      "presets added"]
   ];
+  if (presetChanges) cells.push(["upd", presetChanges, "presets changed"]);
+  if (d.stale.length) cells.push(["arch", d.stale.length, "now stale"]);
   if (d.skipped) cells.push(["", d.skipped, "skipped"]);
   if (d.flagged) cells.push(["", d.flagged, "flagged"]);
   for (const [cls, n, label] of cells) {
     const c = document.createElement("div");
     c.className = "stat " + cls;
-    c.innerHTML = `<div class="n">${n}</div><div class="k">${label}</div>`;
+    c.innerHTML = `<div class="n">${n}</div><div class="k">${esc(label)}</div>`;
     stats.appendChild(c);
   }
   host.appendChild(stats);
 
   const rows = [
-    ...d.create.map(c  => ({ cls: "new",  tag: "new", rec: c.rec,
-                             derived: c.derived, chg: null })),
-    ...d.update.map(u  => ({ cls: "upd",  tag: u.revived ? "back" : "updated",
-                             rec: u.rec, derived: u.derived, chg: u })),
-    ...d.skip.map(s    => ({ cls: "skip", tag: "skipped",
-                             rec: { raw: s.raw }, derived: deriveLib({ raw: s.raw }),
-                             chg: null, note: "not imported — " + s.reason })),
-    ...d.archive.map(a => ({ cls: "arch", tag: "archive",
-                             rec: { ...a.existing, guid: a.guid },
-                             derived: deriveLib(a.existing), chg: null,
-                             note: "not in this file" }))
+    ...d.create.map(c => ({ cls: "new", tag: "new", rec: c.rec, derived: c.derived, chg: c })),
+    ...d.update.map(u => ({ cls: "upd", tag: u.revived ? "back" : "updated",
+                            rec: u.rec, derived: u.derived, chg: u })),
+    ...d.stale.map(s => ({ cls: "arch", tag: "stale", rec: s.existing,
+                           derived: deriveLib(s.existing), chg: null,
+                           note: "not in this file any more — flagged, not archived" })),
+    ...d.skip.map(s => ({ cls: "skip", tag: "skipped", rec: { raw: s.raw },
+                          derived: deriveLib({ raw: s.raw }), chg: null,
+                          note: "not imported — " + s.reason }))
   ];
 
   const list = document.createElement("div");
@@ -3398,24 +3791,46 @@ function renderImportPreview() {
     const sub = document.createElement("div");
     sub.className = "sub";
     const parts = [];
-    if (row.chg && row.chg.revived) parts.push('<span class="now">back in the library</span>');
+    if (row.chg && row.chg.revived) parts.push('<span class="now">back in this library</span>');
     if (row.chg && row.chg.legacy) {
       parts.push('<span class="now">stored in full — every Fusion field kept</span>');
     }
-    if (row.chg && row.chg.paths.length) {
-      for (const p of row.chg.paths.slice(0, PATHS_SHOWN)) {
-        parts.push(`${esc(p.path)}: <span class="was">${esc(shortVal(p.from))}</span> → ` +
-          `<span class="now">${esc(shortVal(p.to))}</span>`);
+    if (row.chg && row.chg.paths && row.chg.paths.length) {
+      for (const pth of row.chg.paths.slice(0, PATHS_SHOWN)) {
+        parts.push(`${esc(pth.path)}: <span class="was">${esc(shortVal(pth.from))}</span> → ` +
+          `<span class="now">${esc(shortVal(pth.to))}</span>`);
       }
       if (row.chg.paths.length > PATHS_SHOWN) {
         parts.push(`+ ${row.chg.paths.length - PATHS_SHOWN} more fields`);
       }
     }
+    if (row.chg && row.chg.merge) {
+      const m = row.chg.merge;
+      if (m.added.length && row.cls !== "new") {
+        parts.push('<span class="now">+' + m.added.length + " preset" +
+          (m.added.length > 1 ? "s" : "") + ": " +
+          esc(m.added.map(presetName).join(", ")) + "</span>");
+      }
+      if (m.changed.length) {
+        parts.push('<span class="now">' + m.changed.length + " preset" +
+          (m.changed.length > 1 ? "s" : "") + " changed: " +
+          esc(m.changed.map(presetName).join(", ")) + "</span>");
+      }
+      // Informational. A preset missing from the file is never deleted.
+      if (m.missing.length) {
+        parts.push(m.missing.length + " preset" + (m.missing.length > 1 ? "s" : "") +
+          " not in this file — kept: " + esc(m.missing.map(presetName).join(", ")));
+      }
+      if (row.cls === "new" && m.presets.length) {
+        parts.push(m.presets.length + " preset" + (m.presets.length > 1 ? "s" : ""));
+      }
+    }
     if (!parts.length) {
       parts.push(esc([row.note, row.derived.type, row.derived.vendor,
         row.derived.product_id].filter(Boolean).join(" · ")));
+    } else if (row.note) {
+      parts.unshift(esc(row.note));
     }
-    // A record with a junk value still imports, raw and all — it just says so.
     for (const issue of (row.derived.issues || [])) {
       parts.push('<span class="was">imported, unparsed field — ' + esc(issue) + "</span>");
     }
@@ -3434,9 +3849,9 @@ function renderImportPreview() {
   }
   host.appendChild(list);
 
+  const writes = d.create.length + d.update.length + d.stale.length;
   const actions = document.createElement("div");
   actions.className = "import-actions";
-  const writes = d.create.length + d.update.length + d.archive.length;
   const confirm = document.createElement("button");
   confirm.type = "button";
   confirm.className = "btn-small";
@@ -3463,9 +3878,21 @@ function resetImport() {
   importState.file = null;
   importState.parsed = null;
   importState.diff = null;
+  importState.libraryId = "";
   document.getElementById("import-preview").innerHTML = "";
   document.getElementById("import-file").value = "";
   setImportStatus("");
+}
+
+function renderLibraryIdList() {
+  const dl = document.getElementById("library-id-list");
+  if (!dl) return;
+  dl.innerHTML = "";
+  for (const id of libraryIds()) {
+    const o = document.createElement("option");
+    o.value = id;
+    dl.appendChild(o);
+  }
 }
 
 async function handleImportFile(file) {
@@ -3478,7 +3905,9 @@ async function handleImportFile(file) {
 
   importState.file = file;
   importState.parsed = parsed;
-  try { importState.diff = diffLibrary(parsed); }
+  importState.libraryId = defaultLibraryId(file.name);
+  renderLibraryIdList();
+  try { importState.diff = diffLibrary(parsed, importState.libraryId); }
   catch (e) { setImportStatus("Couldn't read that library: " + e.message, true); return; }
   const d = importState.diff;
   setImportStatus(`${file.name} — ${parsed.data.length} tools read` +
@@ -3494,10 +3923,8 @@ function commitImport() {
   if (!d || !file) return;
   if (!requireIdentity(commitImport)) return;
 
-  const now = new Date().toISOString();
+  const now = d.now;
   const by = authName();
-  // The envelope version travels with the records that came out of it, so an
-  // export can hand Fusion back the version that library actually declared.
   const version = importState.parsed ? importState.parsed.version : null;
   const stamp = {
     last_import: now, imported_by: by,
@@ -3505,41 +3932,70 @@ function commitImport() {
   };
   const patch = {};
 
-  for (const { rec } of d.create) {
-    patch[rec.guid] = {
-      guid: rec.guid, raw: rec.raw, source: "fusion", archived: false,
-      first_seen: now, ...stamp
+  for (const { key, rec, merge } of d.create) {
+    patch[key] = {
+      key, library_id: d.libraryId, guid: rec.guid, raw: rec.raw,
+      presets: stampPresetAuthor(merge.presets, by),
+      source: "fusion", archived: false,
+      link_state: "unlinked", crib_item_id: null,
+      stale_in_library: false, first_seen: now, ...stamp
     };
   }
-  for (const { rec, existing } of d.update) {
-    // Fusion owns `raw`; everything else the app hung on the record (links,
-    // comments, notes) rides through the re-import untouched.
-    patch[rec.guid] = {
-      ...existing, guid: rec.guid, raw: rec.raw, source: "fusion",
-      archived: false, archived_at: null, ...stamp
+  for (const { key, rec, existing, merge } of d.update) {
+    // Fusion owns raw and presets. Links, review decisions and anything else
+    // the app hung on the record ride through untouched — a re-import that
+    // pushed answered records back into the queue would make the reconcile
+    // screen something to avoid.
+    patch[key] = {
+      ...existing, key, library_id: d.libraryId, guid: rec.guid, raw: rec.raw,
+      presets: stampPresetAuthor(merge.presets, by),
+      source: "fusion",
+      link_state: existing.link_state || "unlinked",
+      stale_in_library: false, stale_since: null, ...stamp
     };
   }
-  for (const { guid, existing } of d.archive) {
-    // Archive, never delete: comments, links and history stay attached.
-    patch[guid] = {
-      ...existing, guid, archived: true, archived_at: now, archived_by: by,
-      archived_reason: "absent from " + file.name
+  for (const { key, existing } of d.stale) {
+    // Flagged and dated, never archived: with overlapping libraries an
+    // absence says nothing about whether the tool exists.
+    patch[key] = {
+      ...existing, key, stale_in_library: true, stale_since: now,
+      last_seen_in_library: existing.last_import || null
     };
   }
+  for (const oldKey of libraryObsoleteKeys) patch[oldKey] = null; // tombstone
 
-  const next = { ...store.library, ...patch };
-  // The patch doubles as the 409 merge payload: library.json is keyed by
-  // guid, so re-applying just the touched guids onto a freshly fetched file
-  // keeps whatever the other writer changed under a guid we didn't touch.
+  const next = { ...store.library };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) delete next[k]; else next[k] = v;
+  }
   const ok = enqueueWrite(LIB_FILE, JSON.stringify(next, null, 2) + "\n",
     "import library: " + file.name, patch);
   if (!ok) return;
+  libraryObsoleteKeys = [];
 
-  const n = d.create.length + d.update.length + d.archive.length;
+  const newCount = d.create.length;
   resetImport();
-  setImportStatus(`Imported ${file.name}: ${d.create.length} new, ` +
-    `${d.update.length} updated, ${d.archive.length} archived ` +
-    `(${n} records queued in one commit).`);
+  setImportStatus(`Imported ${file.name}: ${newCount} new, ${d.update.length} updated, ` +
+    `${d.stale.length} newly stale.`);
+  if (newCount) {
+    const el = document.getElementById("import-status");
+    const a = document.createElement("button");
+    a.type = "button";
+    a.className = "btn-ghost";
+    a.style.marginLeft = "8px";
+    a.textContent = newCount + " new records need reconciling";
+    a.addEventListener("click", () => { location.hash = "reconcile"; });
+    el.appendChild(a);
+  }
+}
+
+/* The merge runs during the diff, before a name is required; the author is
+   stamped onto history entries at commit time. */
+function stampPresetAuthor(presets, by) {
+  return presets.map(p => ({
+    ...p,
+    history: (p.history || []).map(h => h.by ? h : { ...h, by })
+  }));
 }
 
 /* ---- Drop zone wiring ---- */
@@ -3565,6 +4021,912 @@ dropZone.addEventListener("drop", e => {
   const f = e.dataTransfer && e.dataTransfer.files[0];
   if (f) handleImportFile(f);
 });
+
+/* ================= Reconcile workbench (build step 6) ==================
+   Two catalogs, nothing joining them: items.json is the physical drawer
+   (quantity, location, tag-out) and library.json is Fusion's description of
+   a tool. EM-0001 "3/4 4FL carbide square endmill" and the Fusion record
+   `3/4" Flat Endmill` are the same steel; nobody has told the app that.
+
+   Crib items stay authoritative. A library record links TO a crib item, and
+   the link is many-to-one: several Fusion records (one per library, or a
+   rougher and a finisher entry) point at one drawer. Every decision made
+   here — a link, a dismissal, a "no Fusion equivalent" — survives every
+   later import untouched. A reconcile screen that re-asks answered
+   questions is a screen nobody opens twice. ------------------------------ */
+
+const LINK_UNLINKED = "unlinked";
+const LINK_LINKED = "linked";
+const LINK_NONE = "no_crib_item";
+
+function linkState(rec) { return rec && rec.link_state ? rec.link_state : LINK_UNLINKED; }
+
+function libRecords() { return Object.values(store.library).filter(isPlainObject); }
+
+function recordsForItem(itemId) {
+  return libRecords().filter(r => linkState(r) === LINK_LINKED && r.crib_item_id === itemId);
+}
+
+function unlinkedRecords() {
+  return libRecords().filter(r => linkState(r) === LINK_UNLINKED);
+}
+
+function unmatchedItems() {
+  return Object.values(store.items).filter(it =>
+    !it.archived && !it.no_fusion_equivalent && recordsForItem(it.id).length === 0);
+}
+
+/* ---- Matching ---------------------------------------------------------- */
+
+/* The sample library carries " #63004691" — leading space, leading hash.
+   Normalize both sides or the strongest signal never fires. */
+function normPid(v) {
+  return String(v == null ? "" : v).replace(/[#\s]/g, "").toLowerCase();
+}
+
+const ABBREV = {
+  em: "endmill", endmill: "endmill", "end": "end", mill: "endmill",
+  sq: "square", square: "square", ball: "ball", bn: "bullnose",
+  cr: "cornerradius", rgh: "rougher", rougher: "rougher",
+  fl: "flute", flt: "flute", flute: "flute", flutes: "flute",
+  carb: "carbide", carbide: "carbide", hss: "hss", cbd: "carbide",
+  drl: "drill", drill: "drill", jobber: "drill", tap: "tap", rmr: "reamer",
+  reamer: "reamer", cham: "chamfer", chamfer: "chamfer", spot: "spot"
+};
+
+/* "3/4 4FL SQ EM" and `3/4" Flat Endmill` have to land on the same tokens:
+   fractions become decimals, 4FL splits into 4 + flute, abbreviations
+   expand, punctuation goes. */
+function normTokens(text) {
+  let s = String(text == null ? "" : text).toLowerCase();
+  s = s.replace(/(\d+)\s*\/\s*(\d+)/g, (m, a, b) => {
+    const n = Number(a) / Number(b);
+    return isFinite(n) ? String(Number(n.toFixed(4))) : m;
+  });
+  s = s.replace(/(\d+)\s*(fl|flute|flutes)\b/g, "$1 flute");
+  s = s.replace(/[^a-z0-9. ]+/g, " ");
+  const out = [];
+  for (let t of s.split(/\s+/)) {
+    if (!t) continue;
+    if (/^\d*\.?\d+$/.test(t)) {
+      const n = Number(t);
+      if (isFinite(n)) t = String(Number(n.toFixed(4)));
+    } else if (ABBREV[t]) {
+      t = ABBREV[t];
+    }
+    out.push(t);
+  }
+  return out;
+}
+
+function tokenOverlap(a, b) {
+  const A = new Set(a), B = new Set(b);
+  if (!A.size || !B.size) return 0;
+  let hit = 0;
+  for (const t of A) if (B.has(t)) hit++;
+  return hit / Math.min(A.size, B.size);
+}
+
+const DIA_TOL = 0.002;   // inches; covers 0.7500 vs 0.75 and honest rounding
+
+function itemDia(item) {
+  const v = obj(item.fields).dia;
+  return typeof v === "number" && isFinite(v) ? v : null;
+}
+function itemFlutes(item) {
+  const v = obj(item.fields).flutes;
+  const n = typeof v === "number" ? v : parseInt(v, 10);
+  return isFinite(n) ? n : null;
+}
+
+/* Fusion kind -> crib family. Anything unmapped leaves the family for the
+   operator to pick rather than guessing wrong. */
+function famKeyForLib(d) {
+  const t = String(d.type || "").toLowerCase();
+  if (d.kind === "milling") return "endmill";
+  if (d.kind === "turning") return "insert_tooling";
+  if (/tap/.test(t)) return "tap";
+  if (/ream/.test(t)) return "reamer";
+  if (d.kind === "hole") return "drill";
+  return null;
+}
+
+const TYPE_HINTS = [
+  [/ball/, "ball"], [/bull|corner\s*rad|torus/, "corner_rad"], [/chamfer/, "chamfer"],
+  [/rough/, "rougher"], [/thread\s*mill/, "thread_mill"], [/flat|square/, "square"],
+  [/spot/, "spot"], [/center|centre/, "center"], [/counter/, "countersink"]
+];
+function typeKeyForLib(fam, d) {
+  if (!fam) return null;
+  const t = String(d.type || "").toLowerCase() + " " + String(d.description || "").toLowerCase();
+  for (const [re, key] of TYPE_HINTS) {
+    if (re.test(t) && fam.types.some(x => x.key === key)) return key;
+  }
+  return fam.types.length ? fam.types[0].key : null;
+}
+
+const SCORE_FLOOR = 25;
+
+/* In descending strength: product id, then family+diameter+flutes, then
+   description overlap. The reason travels with the score — an unexplained
+   ranking is not something a human can confirm. */
+function scoreItem(rec, d, item) {
+  const reasons = [];
+  let score = 0;
+
+  const pidLib = normPid(d.product_id), pidCrib = normPid(item.mfr_part_number);
+  if (pidLib && pidLib === pidCrib) {
+    return { score: 100, reasons: ["same product id"] };
+  }
+
+  const fam = famKeyForLib(d);
+  const dia = toInches(d.dia, d.unit);
+  const cribDia = itemDia(item);
+  const famOk = fam && item.family === fam;
+  const diaOk = dia != null && cribDia != null && Math.abs(dia - cribDia) <= DIA_TOL;
+
+  if (famOk && diaOk) {
+    score = 62;
+    reasons.push("same family, dia " + fmtDec(cribDia));
+    const lf = d.flutes, cf = itemFlutes(item);
+    if (lf != null && cf != null) {
+      if (Number(lf) === cf) { score += 18; reasons.push(cf + " flute"); }
+      else { score -= 22; reasons.push("flutes differ (" + lf + " vs " + cf + ")"); }
+    }
+  } else if (famOk && dia != null && cribDia != null) {
+    score = 12;
+  }
+
+  const ov = tokenOverlap(normTokens(d.description), normTokens(item.description));
+  if (ov > 0) {
+    reasons.push("description " + Math.round(ov * 100) + "% match");
+    score += score > 0 ? Math.round(ov * 15) : Math.round(ov * 55);
+  }
+  return { score: Math.max(0, Math.min(99, score)), reasons };
+}
+
+function candidatesFor(rec, limit) {
+  const d = deriveLib(rec);
+  const out = [];
+  for (const item of Object.values(store.items)) {
+    if (item.archived) continue;
+    const { score, reasons } = scoreItem(rec, d, item);
+    if (score >= SCORE_FLOOR) out.push({ item, score, reasons });
+  }
+  out.sort((a, b) => b.score - a.score || (a.item.id < b.item.id ? -1 : 1));
+  return out.slice(0, limit || 5);
+}
+
+function confidenceLabel(score) {
+  if (score >= 90) return "high";
+  if (score >= 60) return "medium";
+  return "low";
+}
+
+/* ---- Grouping ----------------------------------------------------------
+   One physical tool can arrive as fourteen library records. Asking about it
+   fourteen times is how a queue gets abandoned, so records that point at the
+   same answer are one card. */
+
+function groupSignature(rec, d, best) {
+  if (best) return "item:" + best.item.id;
+  const pid = normPid(d.product_id);
+  if (pid) return "pid:" + pid;
+  return "desc:" + normTokens(d.description).join(" ") + "|" +
+    (toInches(d.dia, d.unit) ?? "");
+}
+
+function buildReconcileQueue() {
+  const groups = new Map();
+  for (const rec of unlinkedRecords()) {
+    const d = deriveLib(rec);
+    const cands = candidatesFor(rec);
+    const best = cands.length ? cands[0] : null;
+    const sig = groupSignature(rec, d, best);
+    let g = groups.get(sig);
+    if (!g) {
+      g = { sig, records: [], derived: d, candidates: cands, selected: 0 };
+      groups.set(sig, g);
+    }
+    g.records.push(rec);
+    // The richest candidate list in the group wins, so one weak record
+    // doesn't hide a strong match found by its twin.
+    if (cands.length && (!g.candidates.length || cands[0].score > g.candidates[0].score)) {
+      g.candidates = cands;
+      g.derived = d;
+    }
+  }
+  const list = [...groups.values()];
+  for (const g of list) {
+    const top = g.candidates[0];
+    // Pre-selected when confident, never auto-applied.
+    const remembered = reconState.selection.get(g.sig);
+    g.selected = remembered !== undefined && remembered < g.candidates.length
+      ? remembered
+      : (top && top.score >= 60 ? 0 : -1);
+    g.alreadyLinked = top ? recordsForItem(top.item.id).length > 0 : false;
+  }
+  // Biggest groups first, and anything skipped this sitting drops to the end.
+  const skipRank = sig => {
+    const i = reconState.skipped.indexOf(sig);
+    return i < 0 ? -1 : i;
+  };
+  list.sort((a, b) =>
+    (skipRank(a.sig) >= 0) - (skipRank(b.sig) >= 0) ||
+    skipRank(a.sig) - skipRank(b.sig) ||
+    b.records.length - a.records.length ||
+    ((b.candidates[0] ? b.candidates[0].score : 0) - (a.candidates[0] ? a.candidates[0].score : 0)));
+  return list;
+}
+
+/* ---- Writes ------------------------------------------------------------ */
+
+/* Fusion geometry -> crib field keys. Only keys the family's schema actually
+   has are offered, so an endmill never grows a turning field. */
+const GEOM_TO_FIELD = { DC: "dia", NOF: "flutes", RE: "corner_rad",
+                        OAL: "oal", LCF: "loc", SFDM: "shank_dia" };
+
+/* Which side wins by default. Fusion is richer and better maintained for
+   geometry and ordering data — filling in missing product IDs is half the
+   reason this screen exists. What somebody typed on purpose stays. */
+const FUSION_WINS = new Set(["mfr_part_number", "order_url", "vendor",
+  "dia", "flutes", "corner_rad", "oal", "loc", "shank_dia"]);
+
+function libFieldValues(rec) {
+  const d = deriveLib(rec);
+  const out = { mfr_part_number: str(d.product_id).trim(),
+                order_url: str(d.product_link).trim(),
+                vendor: str(d.vendor).trim() };
+  for (const [gk, fk] of Object.entries(GEOM_TO_FIELD)) {
+    const v = obj(d.geometry)[gk];
+    if (v === undefined || v === null || v === "") continue;
+    if (!looksNumeric(v)) continue;
+    // Crib fields are decimal inches; the library value keeps its own unit.
+    out[fk] = fk === "flutes" ? Number(v) : toInches(v, d.unit);
+  }
+  return out;
+}
+
+function itemFieldValue(item, key) {
+  if (key === "mfr_part_number" || key === "order_url" || key === "vendor") {
+    return item[key] || "";
+  }
+  const v = obj(item.fields)[key];
+  return v === undefined ? null : v;
+}
+
+function fieldLabel(item, key) {
+  if (key === "mfr_part_number") return "Product ID";
+  if (key === "order_url") return "Reorder link";
+  if (key === "vendor") return "Vendor";
+  const fam = famOf(item), type = typeOf(item);
+  if (fam && type) {
+    const f = resolveSchema(fam, type).find(x => x.key === key);
+    if (f) return f.label;
+  }
+  return key;
+}
+
+/* Only fields the crib item's own schema knows about, and only where the two
+   sides actually disagree. */
+function conflictRows(item, rec) {
+  const libVals = libFieldValues(rec);
+  const fam = famOf(item), type = typeOf(item);
+  const schemaKeys = new Set(fam && type
+    ? resolveSchema(fam, type).map(f => f.key) : []);
+  const rows = [];
+  for (const [key, libVal] of Object.entries(libVals)) {
+    if (libVal === "" || libVal === null || libVal === undefined) continue;
+    const isMeta = key === "mfr_part_number" || key === "order_url" || key === "vendor";
+    if (!isMeta && !schemaKeys.has(key)) continue;
+    const cribVal = itemFieldValue(item, key);
+    const same = typeof libVal === "number" && typeof cribVal === "number"
+      ? Math.abs(libVal - cribVal) <= DIA_TOL
+      : String(cribVal ?? "") === String(libVal);
+    if (same) continue;
+    rows.push({ key, label: fieldLabel(item, key), lib: libVal, crib: cribVal,
+                take: FUSION_WINS.has(key) ? "lib" : "crib" });
+  }
+  return rows;
+}
+
+function applyRowsToItem(item, rows) {
+  const next = { ...item, fields: { ...obj(item.fields) } };
+  for (const r of rows) {
+    if (r.take !== "lib") continue;
+    if (r.key === "mfr_part_number" || r.key === "order_url" || r.key === "vendor") {
+      next[r.key] = r.lib;
+    } else {
+      next.fields[r.key] = r.lib;
+      // dia-like fields carry a display string alongside the decimal.
+      const fam = famOf(item), type = typeOf(item);
+      const f = fam && type && resolveSchema(fam, type).find(x => x.key === r.key);
+      if (f && f.kind === "dia") next.fields[r.key + "_display"] = fmtDec(r.lib);
+    }
+  }
+  return next;
+}
+
+/* One link decision = one item write (when fields changed) + one library
+   write covering every record in the group. */
+function writeLink(records, item, rows) {
+  if (!requireIdentity()) return false;
+  const now = new Date().toISOString();
+  const by = authName();
+
+  if (rows && rows.some(r => r.take === "lib")) {
+    const updated = { ...applyRowsToItem(item, rows), updated_at: now, updated_by: by };
+    enqueueItemWrite("items/" + item.id + ".json",
+      JSON.stringify(updated, null, 2) + "\n",
+      "reconcile: " + item.id + " ← " + libDesc(records[0]));
+  }
+  const patch = {};
+  for (const rec of records) {
+    patch[rec.key] = { ...rec, crib_item_id: item.id, link_state: LINK_LINKED,
+                       linked_by: by, linked_at: now };
+  }
+  return writeLibraryPatch(patch,
+    "reconcile: " + item.id + " ← " + libDesc(records[0]) +
+    (records.length > 1 ? " (+" + (records.length - 1) + " more)" : ""));
+}
+
+function writeLibraryPatch(patch, summary) {
+  const next = { ...store.library };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) delete next[k]; else next[k] = v;
+  }
+  return enqueueWrite(LIB_FILE, JSON.stringify(next, null, 2) + "\n", summary, patch);
+}
+
+function markNotStocked(records) {
+  if (!requireIdentity()) return false;
+  const now = new Date().toISOString(), by = authName();
+  const patch = {};
+  for (const rec of records) {
+    patch[rec.key] = { ...rec, link_state: LINK_NONE, crib_item_id: null,
+                       linked_by: by, linked_at: now };
+  }
+  return writeLibraryPatch(patch, "reconcile: not stocked — " +
+    libDesc(records[0]) + (records.length > 1 ? " (+" + (records.length - 1) + " more)" : ""));
+}
+
+function markNoFusionEquivalent(item) {
+  if (!requireIdentity()) return false;
+  const updated = { ...item, no_fusion_equivalent: true,
+    updated_at: new Date().toISOString(), updated_by: authName() };
+  return enqueueItemWrite("items/" + item.id + ".json",
+    JSON.stringify(updated, null, 2) + "\n",
+    "reconcile: " + item.id + " has no Fusion equivalent");
+}
+
+/* Seeded from the library record, linked on creation. Quantity is left
+   empty on purpose — a guessed count is worse than no count. */
+function createItemFromLibrary(records) {
+  if (!requireIdentity()) return false;
+  const rec = records[0];
+  const d = deriveLib(rec);
+  const famKey = famKeyForLib(d);
+  const fam = CATEGORIES.families.find(f => f.key === famKey && f.enabled);
+  if (!fam) {
+    alertReconcile("No crib family matches “" + (d.type || "this tool") +
+      "”. Add it in the Add Tools screen, then come back and link it.");
+    return false;
+  }
+  const typeKey = typeKeyForLib(fam, d);
+  const now = new Date().toISOString(), by = authName();
+  const id = nextId(fam.prefix);
+  const fields = {};
+  const libVals = libFieldValues(rec);
+  const schema = resolveSchema(fam, { key: typeKey, ...(fam.types.find(t => t.key === typeKey) || {}) });
+  for (const f of schema) {
+    if (libVals[f.key] === undefined || libVals[f.key] === null) continue;
+    fields[f.key] = libVals[f.key];
+    if (f.kind === "dia") fields[f.key + "_display"] = fmtDec(libVals[f.key]);
+  }
+  const item = {
+    id, family: fam.key, type: typeKey,
+    description: d.description || libDesc(rec),
+    substrate: defaultSubstrate(fam),
+    fields,
+    mfr_part_number: libVals.mfr_part_number || "",
+    vendor: libVals.vendor || "",
+    order_url: libVals.order_url || "",
+    notes: "", location: null,
+    qty_on_hand: null,             // the crib guy counts it, the app doesn't guess
+    needs_count: true,
+    min_qty: fam.min_qty_default ?? 0,
+    consumable: fam.consumable_default !== false,
+    archived: false,
+    created_from_library: rec.key,
+    updated_at: now, updated_by: by
+  };
+  if (!enqueueItemWrite("items/" + id + ".json",
+    JSON.stringify(item, null, 2) + "\n",
+    "add " + id + " " + item.description + " (from " + (rec.library_id || "library") + ")")) {
+    return false;
+  }
+  return writeLink(records, item, null);
+}
+
+/* ---- Screen ------------------------------------------------------------ */
+
+const reconState = { tab: "queue", groups: [], bulk: new Set(),
+                     confirm: null, picker: null, note: "",
+                     // Kept across rebuilds: the queue is recomputed on every
+                     // render, and a selection or a skip that evaporated on
+                     // the next paint would be unusable.
+                     selection: new Map(), skipped: [] };
+
+function alertReconcile(msg) {
+  reconState.note = msg;
+  renderReconcile();
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function libLine(d) {
+  const bits = [];
+  if (d.dia != null) bits.push("⌀" + shortVal(d.dia) + (unitIsMm(d.unit) ? "mm" : '"'));
+  if (d.flutes != null) bits.push(d.flutes + "FL");
+  if (d.corner_radius) bits.push("R" + shortVal(d.corner_radius));
+  if (d.type) bits.push(d.type);
+  if (d.vendor) bits.push(d.vendor);
+  if (d.product_id) bits.push(String(d.product_id).trim());
+  return bits.join(" · ");
+}
+
+function renderReconcile() {
+  const host = document.getElementById("reconcile-body");
+  if (!host) return;
+  reconState.groups = buildReconcileQueue();
+  const head = document.getElementById("reconcile-head");
+  const unlinked = unlinkedRecords().length;
+  const orphans = unmatchedItems().length;
+  head.textContent = `${unlinked} library tool${unlinked === 1 ? "" : "s"} to review · ` +
+    `${orphans} crib item${orphans === 1 ? "" : "s"} with no library match`;
+
+  const tabs = document.getElementById("reconcile-tabs");
+  tabs.textContent = "";
+  for (const [key, label] of [["queue", "Queue (" + reconState.groups.length + ")"],
+                              ["reverse", "Crib items (" + orphans + ")"],
+                              ["stale", "Stale (" + libRecords().filter(r => r.stale_in_library).length + ")"]]) {
+    const b = el("button", "chip" + (reconState.tab === key ? " on" : ""), label);
+    b.type = "button";
+    b.addEventListener("click", () => { reconState.tab = key; reconState.bulk.clear(); renderReconcile(); });
+    tabs.appendChild(b);
+  }
+
+  host.textContent = "";
+  if (reconState.note) {
+    const n = el("div", "recon-note", reconState.note);
+    const x = el("button", "btn-ghost", "dismiss");
+    x.type = "button";
+    x.addEventListener("click", () => { reconState.note = ""; renderReconcile(); });
+    n.appendChild(x);
+    host.appendChild(n);
+  }
+  if (reconState.confirm) { renderConfirmPanel(host); return; }
+  if (reconState.picker) { renderPicker(host); return; }
+  if (reconState.tab === "queue") renderQueueTab(host);
+  else if (reconState.tab === "reverse") renderReverseTab(host);
+  else renderStaleTab(host);
+}
+
+function renderQueueTab(host) {
+  if (!reconState.groups.length) {
+    host.appendChild(el("div", "empty-state",
+      libRecords().length ? "Nothing left to review — every library record has an answer."
+                          : "Import a Fusion library first."));
+    return;
+  }
+  if (reconState.bulk.size) {
+    const bar = el("div", "bulk-bar");
+    bar.appendChild(el("span", null, reconState.bulk.size + " selected"));
+    const notStocked = el("button", "btn-ghost", "Not stocked");
+    notStocked.type = "button";
+    notStocked.addEventListener("click", () => {
+      const recs = [];
+      for (const g of reconState.groups) if (reconState.bulk.has(g.sig)) recs.push(...g.records);
+      if (markNotStocked(recs)) { reconState.bulk.clear(); renderReconcile(); }
+    });
+    const linkAll = el("button", "btn-small", "Link all to one crib item…");
+    linkAll.type = "button";
+    linkAll.addEventListener("click", () => {
+      const recs = [];
+      for (const g of reconState.groups) if (reconState.bulk.has(g.sig)) recs.push(...g.records);
+      openPicker(recs);
+    });
+    const clear = el("button", "btn-ghost", "Clear");
+    clear.type = "button";
+    clear.addEventListener("click", () => { reconState.bulk.clear(); renderReconcile(); });
+    bar.appendChild(linkAll); bar.appendChild(notStocked); bar.appendChild(clear);
+    host.appendChild(bar);
+  }
+
+  reconState.groups.forEach((g, gi) => {
+    const card = el("div", "recon-card" + (gi === 0 ? " first" : ""));
+
+    const top = el("div", "recon-top");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = reconState.bulk.has(g.sig);
+    cb.addEventListener("change", () => {
+      if (cb.checked) reconState.bulk.add(g.sig); else reconState.bulk.delete(g.sig);
+      renderReconcile();
+    });
+    top.appendChild(cb);
+    const t = el("div", "recon-title", libDesc(g.records[0]));
+    top.appendChild(t);
+    if (g.records.length > 1) {
+      top.appendChild(el("span", "badge multi", g.records.length + " library records"));
+    }
+    if (g.alreadyLinked && g.candidates[0]) {
+      top.appendChild(el("span", "badge same",
+        "same as " + g.candidates[0].item.id + "?"));
+    }
+    card.appendChild(top);
+    card.appendChild(el("div", "recon-sub", libLine(g.derived)));
+    const presets = g.records.reduce((n, r) => n + (r.presets || []).length, 0);
+    card.appendChild(el("div", "recon-sub",
+      g.records.map(r => r.library_id).join(", ") + " · " + presets + " preset" +
+      (presets === 1 ? "" : "s")));
+
+    if (!g.candidates.length) {
+      card.appendChild(el("div", "recon-sub none", "No crib item scores high enough — create one."));
+    }
+    g.candidates.forEach((c, i) => {
+      const row = el("div", "cand" + (g.selected === i ? " on" : ""));
+      row.appendChild(el("span", "cand-key", String(i + 1)));
+      row.appendChild(el("span", "cand-id", c.item.id));
+      row.appendChild(el("span", "cand-desc", c.item.description || ""));
+      row.appendChild(el("span", "cand-conf " + confidenceLabel(c.score),
+        confidenceLabel(c.score) + " · " + c.reasons.join(", ")));
+      row.addEventListener("click", () => {
+        reconState.selection.set(g.sig, i);
+        renderReconcile();
+      });
+      card.appendChild(row);
+    });
+
+    const acts = el("div", "recon-actions");
+    const mk = (cls, label, fn) => {
+      const b = el("button", cls, label);
+      b.type = "button";
+      b.addEventListener("click", fn);
+      acts.appendChild(b);
+      return b;
+    };
+    const link = mk("btn-small", "Link" +
+      (g.selected >= 0 ? " to " + g.candidates[g.selected].item.id : ""), () => {
+        if (g.selected < 0) return;
+        openConfirm(g.records, g.candidates[g.selected].item);
+      });
+    link.disabled = g.selected < 0;
+    if (g.selected < 0) link.style.opacity = "0.5";
+    mk("btn-ghost", "Search…", () => openPicker(g.records));
+    mk("btn-ghost", "Create crib item", () => { if (createItemFromLibrary(g.records)) renderReconcile(); });
+    mk("btn-ghost", "Not stocked", () => { if (markNotStocked(g.records)) renderReconcile(); });
+    card.appendChild(acts);
+    if (gi === 0) {
+      card.appendChild(el("div", "panel-hint",
+        "1–5 pick · Enter link · N create · X not stocked · S skip"));
+    }
+    host.appendChild(card);
+  });
+}
+
+function renderReverseTab(host) {
+  const items = unmatchedItems();
+  if (!items.length) {
+    host.appendChild(el("div", "empty-state",
+      "Every crib item is either linked or marked as having no Fusion equivalent."));
+    return;
+  }
+  for (const item of items) {
+    const row = el("div", "recon-card");
+    const top = el("div", "recon-top");
+    top.appendChild(el("div", "recon-title", item.id + " · " + (item.description || "")));
+    row.appendChild(top);
+    const fam = famOf(item);
+    row.appendChild(el("div", "recon-sub",
+      [fam ? fam.label : item.family, item.mfr_part_number, item.vendor]
+        .filter(Boolean).join(" · ")));
+    const acts = el("div", "recon-actions");
+    const find = el("button", "btn-small", "Find a library match…");
+    find.type = "button";
+    find.addEventListener("click", () => openLibraryPicker(item));
+    const none = el("button", "btn-ghost", "No Fusion equivalent");
+    none.type = "button";
+    none.addEventListener("click", () => { if (markNoFusionEquivalent(item)) renderReconcile(); });
+    acts.appendChild(find); acts.appendChild(none);
+    row.appendChild(acts);
+    host.appendChild(row);
+  }
+}
+
+function renderStaleTab(host) {
+  const stale = libRecords().filter(r => r.stale_in_library);
+  if (!stale.length) {
+    host.appendChild(el("div", "empty-state",
+      "No stale records — every stored tool showed up in the last import of its library."));
+    return;
+  }
+  host.appendChild(el("div", "panel-hint",
+    "These stopped appearing in re-imports of their own library. Nothing has " +
+    "been done to them: with overlapping libraries an absence proves nothing. " +
+    "Archiving a tool stays a human decision about physical steel."));
+  for (const rec of stale) {
+    const row = el("div", "recon-card");
+    row.appendChild(el("div", "recon-title", libDesc(rec)));
+    row.appendChild(el("div", "recon-sub",
+      rec.library_id + " · last seen " +
+      String(rec.last_seen_in_library || rec.stale_since || "").slice(0, 10) +
+      (rec.crib_item_id ? " · linked to " + rec.crib_item_id : "")));
+    host.appendChild(row);
+  }
+}
+
+/* ---- Link confirmation: field-by-field, nothing applied until confirmed - */
+
+function openConfirm(records, item) {
+  reconState.confirm = { records, item, rows: conflictRows(item, records[0]) };
+  renderReconcile();
+}
+
+function renderConfirmPanel(host) {
+  const { records, item, rows } = reconState.confirm;
+  const card = el("div", "recon-card");
+  card.appendChild(el("div", "recon-title",
+    "Link " + item.id + " ← " + libDesc(records[0]) +
+    (records.length > 1 ? " (+" + (records.length - 1) + " more)" : "")));
+  if (!rows.length) {
+    card.appendChild(el("div", "recon-sub", "Nothing disagrees — the link is all that changes."));
+  } else {
+    card.appendChild(el("div", "recon-sub",
+      "Pick a side per field. Fusion wins on geometry and ordering data by " +
+      "default; what was typed in the crib on purpose stays."));
+    const table = el("div", "cmp");
+    for (const r of rows) {
+      const line = el("div", "cmp-row");
+      line.appendChild(el("div", "cmp-label", r.label));
+      const mkSide = (which, val, tag) => {
+        const b = el("button", "cmp-side" + (r.take === which ? " on" : ""));
+        b.type = "button";
+        b.innerHTML = '<span class="cmp-tag">' + tag + "</span>" + esc(shortVal(val));
+        b.addEventListener("click", () => { r.take = which; renderReconcile(); });
+        return b;
+      };
+      line.appendChild(mkSide("crib", r.crib, "crib"));
+      line.appendChild(mkSide("lib", r.lib, "fusion"));
+      table.appendChild(line);
+    }
+    card.appendChild(table);
+  }
+  const acts = el("div", "recon-actions");
+  const ok = el("button", "btn-small", "Confirm link");
+  ok.type = "button";
+  ok.addEventListener("click", () => {
+    if (writeLink(records, item, rows)) { reconState.confirm = null; renderReconcile(); }
+  });
+  const cancel = el("button", "btn-ghost", "Cancel");
+  cancel.type = "button";
+  cancel.addEventListener("click", () => { reconState.confirm = null; renderReconcile(); });
+  acts.appendChild(ok); acts.appendChild(cancel);
+  card.appendChild(acts);
+  host.appendChild(card);
+}
+
+/* ---- Pickers ----------------------------------------------------------- */
+
+function openPicker(records) {
+  reconState.picker = { mode: "item", records, q: "" };
+  renderReconcile();
+}
+function openLibraryPicker(item) {
+  reconState.picker = { mode: "library", item, q: "" };
+  renderReconcile();
+}
+
+function renderPicker(host) {
+  const pk = reconState.picker;
+  const card = el("div", "recon-card");
+  card.appendChild(el("div", "recon-title", pk.mode === "item"
+    ? "Pick a crib item for " + libDesc(pk.records[0])
+    : "Pick a library record for " + pk.item.id));
+  const input = document.createElement("input");
+  input.className = "lib-id-input";
+  input.style.width = "100%";
+  input.placeholder = "Search…";
+  input.value = pk.q;
+  input.addEventListener("input", () => { pk.q = input.value; renderPickerRows(list, pk); });
+  card.appendChild(input);
+  const list = el("div", "change-list");
+  card.appendChild(list);
+  const acts = el("div", "recon-actions");
+  const cancel = el("button", "btn-ghost", "Cancel");
+  cancel.type = "button";
+  cancel.addEventListener("click", () => { reconState.picker = null; renderReconcile(); });
+  acts.appendChild(cancel);
+  card.appendChild(acts);
+  host.appendChild(card);
+  renderPickerRows(list, pk);
+  setTimeout(() => input.focus(), 0);
+}
+
+function renderPickerRows(list, pk) {
+  list.textContent = "";
+  const q = pk.q.trim().toLowerCase();
+  if (pk.mode === "item") {
+    const rows = Object.values(store.items)
+      .filter(it => !it.archived)
+      .filter(it => !q || (it.id + " " + (it.description || "") + " " +
+        (it.mfr_part_number || "")).toLowerCase().includes(q))
+      .slice(0, 60);
+    for (const it of rows) {
+      const r = el("div", "change");
+      r.appendChild(el("div", "tag", it.id));
+      const b = el("div", "body");
+      b.appendChild(el("div", "title", it.description || ""));
+      r.appendChild(b);
+      r.style.cursor = "pointer";
+      r.addEventListener("click", () => {
+        reconState.picker = null;
+        openConfirm(pk.records, it);
+      });
+      list.appendChild(r);
+    }
+  } else {
+    const rows = libRecords()
+      .filter(rec => linkState(rec) !== LINK_LINKED || rec.crib_item_id !== pk.item.id)
+      .filter(rec => !q || (libDesc(rec) + " " + (rec.library_id || "")).toLowerCase().includes(q))
+      .slice(0, 60);
+    for (const rec of rows) {
+      const r = el("div", "change");
+      r.appendChild(el("div", "tag", rec.library_id || ""));
+      const b = el("div", "body");
+      b.appendChild(el("div", "title", libDesc(rec)));
+      b.appendChild(el("div", "sub", libLine(deriveLib(rec))));
+      r.appendChild(b);
+      r.style.cursor = "pointer";
+      r.addEventListener("click", () => {
+        reconState.picker = null;
+        openConfirm([rec], pk.item);
+      });
+      list.appendChild(r);
+    }
+  }
+  if (!list.children.length) list.appendChild(el("div", "change-more", "Nothing matches."));
+}
+
+/* ---- Keyboard: the queue is meant to be worked without a mouse ---------- */
+
+document.addEventListener("keydown", e => {
+  if (document.getElementById("screen-reconcile").className.indexOf("active") < 0) return;
+  if (reconState.tab !== "queue" || reconState.confirm || reconState.picker) return;
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return;
+  const g = reconState.groups[0];
+  if (!g) return;
+  if (e.key >= "1" && e.key <= "5") {
+    const i = Number(e.key) - 1;
+    if (i < g.candidates.length) {
+      reconState.selection.set(g.sig, i);
+      renderReconcile();
+      e.preventDefault();
+    }
+    return;
+  }
+  const k = e.key.toLowerCase();
+  if (e.key === "Enter" && g.selected >= 0) {
+    openConfirm(g.records, g.candidates[g.selected].item); e.preventDefault();
+  } else if (k === "n") {
+    if (createItemFromLibrary(g.records)) renderReconcile();
+    e.preventDefault();
+  } else if (k === "x") {
+    if (markNotStocked(g.records)) renderReconcile();
+    e.preventDefault();
+  } else if (k === "s") {
+    // Skip: to the back of the queue for this sitting only. Nothing is
+    // written, and it is back at the top next time the app loads.
+    reconState.skipped = reconState.skipped.filter(x => x !== g.sig).concat(g.sig);
+    renderReconcile();
+    e.preventDefault();
+  }
+});
+
+
+
+
+/* Read-only on purpose: reconciling and identity editing happen in the
+   workbench, not here. This is "what does Fusion think this tool is". */
+function renderFusionSection(item) {
+  const recs = recordsForItem(item.id);
+  if (!recs.length) {
+    if (!item.no_fusion_equivalent) return;
+    const t = document.createElement("div");
+    t.className = "drawer-section-title";
+    t.textContent = "In Fusion";
+    drawerEl.appendChild(t);
+    const n = document.createElement("div");
+    n.className = "recon-sub";
+    n.textContent = "Marked as having no Fusion equivalent.";
+    drawerEl.appendChild(n);
+    return;
+  }
+  const title = document.createElement("div");
+  title.className = "drawer-section-title";
+  const libs = [...new Set(recs.map(r => r.library_id))];
+  const total = libraryIds().length;
+  title.textContent = "In Fusion — appears in " + libs.length + " of " + total +
+    " librar" + (total === 1 ? "y" : "ies");
+  drawerEl.appendChild(title);
+
+  const box = document.createElement("div");
+  box.className = "fusion-list";
+  for (const rec of recs) {
+    const d = deriveLib(rec);
+    const row = document.createElement("div");
+    row.className = "fusion-rec";
+    const name = document.createElement("div");
+    name.textContent = libDesc(rec);
+    row.appendChild(name);
+    const meta = document.createElement("div");
+    meta.className = "lib-name";
+    meta.textContent = rec.library_id + " · " + libLine(d) +
+      (rec.stale_in_library ? " · stale since " +
+        String(rec.stale_since || "").slice(0, 10) : "");
+    row.appendChild(meta);
+    box.appendChild(row);
+  }
+  drawerEl.appendChild(box);
+
+  // Collapsed by preset key, not by name: the same guid arriving from six
+  // libraries is one row with six sources, and two differently-named presets
+  // stay two rows. Otherwise this is sixty lines nobody reads.
+  const rows = aggregatePresets(recs);
+  if (!rows.length) return;
+  const pt = document.createElement("div");
+  pt.className = "drawer-section-title";
+  pt.textContent = "Speeds & feeds (" + rows.length + ")";
+  drawerEl.appendChild(pt);
+  const plist = document.createElement("div");
+  plist.className = "fusion-list";
+  for (const row of rows) {
+    for (const v of row.variants) {
+      const p = obj(v.raw);
+      const line = document.createElement("div");
+      line.className = "preset-row" + (row.conflict ? " conflict" : "");
+      const nm = document.createElement("span");
+      nm.className = "pname";
+      nm.textContent = row.name + (row.conflict ? " ⚠" : "");
+      line.appendChild(nm);
+      const bits = [];
+      if (p.v_c != null) bits.push("vc " + shortVal(p.v_c));
+      if (p.f_z != null) bits.push("fz " + shortVal(p.f_z));
+      if (p.f_n != null) bits.push("fn " + shortVal(p.f_n));
+      if (p.n != null) bits.push("n " + shortVal(p.n));
+      if (p.v_f != null) bits.push("vf " + shortVal(p.v_f));
+      if (p.stepdown != null) bits.push("ap " + shortVal(p.stepdown));
+      if (p.stepover != null) bits.push("ae " + shortVal(p.stepover));
+      if (p["tool-coolant"] != null) bits.push(String(p["tool-coolant"]));
+      if (isPlainObject(p.material) && p.material.name) bits.push(String(p.material.name));
+      else if (typeof p.material === "string") bits.push(p.material);
+      line.appendChild(document.createTextNode(bits.join(" · ")));
+      const src = document.createElement("span");
+      src.className = "psrc";
+      const last = row.sources.map(x => x.last_seen).filter(Boolean).sort().pop();
+      src.textContent = v.libraries.join(", ") + (last ? " · seen " + last.slice(0, 10) : "");
+      line.appendChild(src);
+      plist.appendChild(line);
+    }
+  }
+  drawerEl.appendChild(plist);
+}
 
 /* ---- Boot ---- */
 
