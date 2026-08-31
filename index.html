@@ -1168,6 +1168,7 @@
     <section class="screen" id="screen-import">
       <h1>Import Library</h1>
       <div class="lib-summary" id="lib-summary"></div>
+      <div class="recon-note" id="legacy-banner" hidden></div>
       <div class="drop-zone" id="import-drop">
         <strong>Drop a Fusion .tools file here</strong>
         <div class="dz-hint">or click to pick one — zipped or bare JSON, both work</div>
@@ -1343,7 +1344,39 @@ const BACKOFF_CAP_MS  = 60000;
 const TC_BUILD = "phase-2.5";
 window.TC_BUILD = TC_BUILD;
 
-const LIB_FILE = "library.json";
+/* One file per library: library/<library_id>.json, each keyed by guid.
+   The combined file crosses the Contents API's 1 MB read ceiling at about
+   four libraries and is hopeless at fourteen, and an import that rewrites
+   every library to add one is wasted bytes on shop wifi. library.json is the
+   legacy combined file, read for migration and then emptied. */
+const LIB_FILE = "library.json";          // legacy combined file
+const LIB_DIR = "library/";
+
+function libFileId(libraryId) {
+  return String(libraryId).replace(/[^A-Za-z0-9._-]+/g, "_") || "library";
+}
+function libFilePath(libraryId) { return LIB_DIR + libFileId(libraryId) + ".json"; }
+function guidOfKey(key) {
+  const i = String(key).indexOf(LIB_KEY_SEP);
+  return i < 0 ? key : key.slice(i + LIB_KEY_SEP.length);
+}
+
+/* The file body for one library: its records, keyed by guid. */
+function libraryFileContent(libraryId) {
+  const out = {};
+  for (const [key, rec] of Object.entries(store.library)) {
+    if (!rec || rec.library_id !== libraryId) continue;
+    out[guidOfKey(key)] = rec;
+  }
+  return out;
+}
+
+function keysForLibrary(libraryId) {
+  return Object.keys(store.library).filter(k => {
+    const r = store.library[k];
+    return r && r.library_id === libraryId;
+  });
+}
 
 const store = {
   items: {}, tagouts: {}, logEvents: {}, people: [],
@@ -1355,7 +1388,29 @@ function lsGet(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
   catch { return fallback; }
 }
-function lsSet(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+/* localStorage throws QuotaExceededError when it is full, and a throw inside
+   a click handler kills the handler — the button looks inert and nothing
+   says why. Every write goes through here, returns a boolean, and a failure
+   becomes a banner instead of silence. */
+let storageError = null;
+
+function lsSet(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    if (storageError && storageError.key === key) { storageError = null; renderConflictBanner(); }
+    return true;
+  } catch (e) {
+    storageError = {
+      key,
+      name: e && e.name ? e.name : "StorageError",
+      msg: "This browser's local storage is full, so the change could not be " +
+           "saved locally. Anything already queued is safe. Use Refresh data " +
+           "to drop the local cache and try again."
+    };
+    try { renderConflictBanner(); } catch { /* pre-DOM boot */ }
+    return false;
+  }
+}
 
 /* ---- Base64 that survives non-ASCII (TextEncoder route, not raw btoa) ---- */
 
@@ -1424,7 +1479,7 @@ function handleAuthFailure(status) {
    One shared GitHub bot account writes every commit, so git authorship is
    noise. This name is the attribution: it rides the commit message, the
    log-event body, and updated_by. No name means no writes — every write
-   path funnels through requireIdentity() first, and enqueueWrite() backstops
+   path funnels through requireIdentity() first, and enqueueOp() backstops
    it so nothing can slip past a missed call site. ------------------------ */
 
 function authName() {
@@ -1547,7 +1602,7 @@ function ghFetch(path, opts = {}) {
 /* ---- Load: tree fetch, batched blob reads, cache keyed on tree SHA ---- */
 
 function loadCache() { return lsGet(LS_CACHE, { treeSha: null, files: {} }); }
-function saveCache(cache) { lsSet(LS_CACHE, cache); }
+function saveCache(cache) { return lsSet(LS_CACHE, cache); }
 
 async function loadData() {
   const cache = loadCache();
@@ -1606,18 +1661,39 @@ async function loadData() {
 function ingest(cache) {
   store.items = {}; store.tagouts = {}; store.logEvents = {}; store.people = [];
   store.library = {};
+  const libraryFiles = {};
+  let legacyLibraryData = null;
   for (const [path, file] of Object.entries(cache.files)) {
     let data;
     try { data = JSON.parse(file.text); } catch { continue; }
-    if (path === LIB_FILE)                 store.library = migrateLibrary(data);
+    if (path === LIB_FILE)                 legacyLibraryData = data;
+    else if (path.startsWith(LIB_DIR))     libraryFiles[path] = data;
     else if (path === "people.json")       store.people = data;
     else if (path.startsWith("items/"))    store.items[data.id] = data;
     else if (path.startsWith("tagouts/"))  store.tagouts[data.id] = data;
     else if (path.startsWith("log/"))      store.logEvents[path] = data;
   }
-  // Queued-but-unflushed writes replay on top so the UI stays optimistic.
-  for (const op of queueOps()) applyOptimistic(op);
+  // Legacy combined file first, then the per-library files on top: after a
+  // migration the split files are authoritative for anything they carry.
+  store.library = migrateLibrary(legacyLibraryData);
+  legacyLibraryIds = [...new Set(Object.values(store.library)
+    .map(r => r.library_id).filter(Boolean))];
+  for (const [path, data] of Object.entries(libraryFiles)) {
+    if (!isPlainObject(data)) continue;
+    const libraryId = libraryIdOfFile(path, data);
+    for (const [guid, rec] of Object.entries(data)) {
+      if (!isPlainObject(rec)) continue;
+      const key = libKey(libraryId, rec.guid || guid);
+      store.library[key] = { ...rec, key, library_id: libraryId,
+        guid: rec.guid || guid,
+        presets: normalizePresetEntries(rec, libraryId) };
+    }
+    // A library that lives in its own file no longer needs migrating.
+    legacyLibraryIds = legacyLibraryIds.filter(id => id !== libraryId);
+  }
   store.loaded = cache.treeSha !== null;
+  // The optimistic bodies are already in the cache and were ingested above;
+  // queued ops are descriptors and carry nothing further to replay.
   renderCrib();
   updateChip();
   renderIdentity();
@@ -1637,58 +1713,111 @@ function ingest(cache) {
    - state:   "pending" | "conflict" (conflict = 409 twice; banner, kept) */
 
 function queueOps() { return lsGet(LS_QUEUE, []); }
-function saveQueue(ops) { lsSet(LS_QUEUE, ops); }
+function saveQueue(ops) { return lsSet(LS_QUEUE, ops); }
 
 let netDown = false;
 let flushing = false;
 let flushTimer = null;
 
-function enqueueWrite(path, content, summary, patch) {
-  if (!requireIdentity()) return false;
-  const ops = queueOps();
-  ops.push({
-    id: crypto.randomUUID(), path, content, summary, author: authName(),
-    patch: patch || null, attempts: 0, state: "pending", nextAt: 0,
-    lastError: null, rev: 0
-  });
-  saveQueue(ops);
-  applyOptimistic(ops[ops.length - 1]);
-  renderCrib(); updateChip(); renderQueuePanel(); renderSessionList();
-  flushQueue();
-  return true;
+/* An op is a DESCRIPTOR, not a payload: which file, what kind of write, which
+   record keys it touched, who and when. The JSON body is rebuilt from
+   in-memory state at flush time. A 137-record import held as text in the
+   queue is how localStorage hits its quota, and a QuotaExceededError thrown
+   inside the click handler is why the button appeared to do nothing.
+
+   The optimistic copy of the file lives in the blob cache, where that file's
+   text already lives once it syncs — so the bytes are stored once rather than
+   twice, and a reload still rebuilds the queued change. */
+
+function buildOpBody(op) {
+  if (op.kind === "library") return jsonFile(libraryFileContent(op.target));
+  if (op.kind === "people")  return jsonFile(store.people);
+  if (op.kind === "item")    return jsonFile(store.items[op.target]);
+  if (op.kind === "log")     return jsonFile(store.logEvents[op.path]);
+  if (op.kind === "legacy-blank") return "{}\n";
+  return null;
 }
 
-/* Survey-mode recommit: a correction to a record whose op is still pending
-   replaces that op in place instead of stacking a second PUT of the same
-   file. rev++ tells flushQueue a coalesce landed mid-flight, so a PUT of
-   the stale content completes without dropping the newer one. */
-function enqueueItemWrite(path, content, summary) {
+/* The 409 merge payload, rebuilt the same way. Only the keys this op touched
+   are re-applied onto the freshly fetched file, so a concurrent writer's
+   record under an untouched key survives. */
+function buildOpPatch(op) {
+  if (op.kind !== "library" || !Array.isArray(op.keys)) return null;
+  const patch = {};
+  for (const key of op.keys) {
+    const rec = store.library[key];
+    patch[guidOfKey(key)] = rec ? rec : null;   // null = gone from this file
+  }
+  return patch;
+}
+
+function jsonFile(v) {
+  return v === undefined ? null : JSON.stringify(v, null, 2) + "\n";
+}
+
+/* Caller mutates the store first, then enqueues. Returns false when the write
+   could not be recorded locally (quota), so callers can bail loudly. */
+function enqueueOp(path, kind, target, summary, keys) {
   if (!requireIdentity()) return false;
   const ops = queueOps();
   const existing = ops.find(o => o.path === path && o.state === "pending");
-  if (!existing) return enqueueWrite(path, content, summary);
-  existing.content = content;
-  existing.summary = summary;
-  existing.author = authName();
-  existing.attempts = 0;
-  existing.nextAt = 0;
-  existing.lastError = null;
-  existing.rev = (existing.rev || 0) + 1;
-  saveQueue(ops);
-  applyOptimistic(existing);
-  renderCrib(); updateChip(); renderQueuePanel(); renderSessionList();
+  if (existing) {
+    // The body is rebuilt at flush, so a second write to the same file needs
+    // no new op — just a nudge and a merged key set. rev++ tells flushQueue a
+    // coalesce landed mid-flight.
+    existing.summary = summary;
+    existing.author = authName();
+    existing.ts = new Date().toISOString();
+    existing.attempts = 0;
+    existing.nextAt = 0;
+    existing.lastError = null;
+    existing.rev = (existing.rev || 0) + 1;
+    if (keys) existing.keys = [...new Set([...(existing.keys || []), ...keys])];
+  } else {
+    ops.push({
+      id: crypto.randomUUID(), path, kind, target: target ?? null,
+      keys: keys || null, summary, author: authName(),
+      ts: new Date().toISOString(), attempts: 0, state: "pending",
+      nextAt: 0, lastError: null, rev: 0
+    });
+  }
+  const body = buildOpBody(ops.find(o => o.path === path && o.state === "pending"));
+  const cachedOk = body === null ? true : cacheOptimistic(path, body);
+  const queuedOk = saveQueue(ops);
+  afterWriteEnqueued();
+  if (!queuedOk) {
+    setStorageBlocked("The write queue could not be saved — " + storageError.msg);
+    return false;
+  }
+  if (!cachedOk) {
+    // Queued and will still be pushed; only the local copy is missing, so a
+    // reload before the flush would lose it. Say so rather than pretend.
+    setStorageBlocked("Queued, but the local copy could not be cached — " +
+      "don't reload until the queue drains. " + storageError.msg);
+  }
   flushQueue();
   return true;
 }
 
-function applyOptimistic(op) {
-  let data;
-  try { data = JSON.parse(op.content); } catch { return; }
-  if (op.path === LIB_FILE)                { store.library = migrateLibrary(data); afterLibraryChange(); }
-  else if (op.path === "people.json")      { store.people = data; renderPeopleDatalist(); }
-  else if (op.path.startsWith("items/"))   store.items[data.id] = data;
-  else if (op.path.startsWith("tagouts/")) store.tagouts[data.id] = data;
-  else if (op.path.startsWith("log/"))     store.logEvents[op.path] = data;
+/* The optimistic file body goes into the blob cache with the sha it was based
+   on, so a reload rebuilds the same state and the flush still sends the sha
+   GitHub expects. */
+function cacheOptimistic(path, body) {
+  const cache = loadCache();
+  const prev = cache.files[path];
+  cache.files[path] = { sha: prev ? prev.sha : undefined, text: body,
+                        pending: true };
+  return saveCache(cache);
+}
+
+function afterWriteEnqueued() {
+  renderCrib(); updateChip(); renderQueuePanel(); renderSessionList();
+}
+
+let storageBlocked = null;
+function setStorageBlocked(msg) {
+  storageBlocked = msg;
+  renderConflictBanner();
 }
 
 /* "update qty: 1/2 EM (Frank)" — the name is the only real authorship
@@ -1720,7 +1849,7 @@ async function putFile(path, content, message, sha) {
 
 function recordWriteInCache(path, content, newSha) {
   const cache = loadCache();
-  cache.files[path] = { sha: newSha, text: content };
+  cache.files[path] = { sha: newSha, text: content };   // no longer pending
   // treeSha is now stale; null it so the next load refetches the tree but
   // still reuses every per-file blob that didn't change.
   cache.treeSha = null;
@@ -1736,24 +1865,25 @@ async function pushOp(op) {
     sha = fresh ? fresh.sha : undefined;
   }
 
-  let res = await putFile(op.path, op.content, commitMessage(op), sha);
+  // Built now, from current state — not from bytes frozen at enqueue time,
+  // so a later edit to the same file rides along instead of being clobbered.
+  const body = buildOpBody(op);
+  if (body === null) return "done";   // the record went away before the flush
+  const patch = buildOpPatch(op);
+
+  let res = await putFile(op.path, body, commitMessage(op), sha);
 
   // 409 = sha mismatch (other user edited the same file); 422 covers the
   // "file exists but no sha sent" edge. Refetch, reapply, retry once.
   if (res.status === 409 || res.status === 422) {
     const fresh = await fetchFileFresh(op.path);
-    let content = op.content;
-    if (op.patch && fresh) {
+    let content = body;
+    if (patch && fresh) {
+      // A library file is a map keyed by guid: re-apply only the records this
+      // op touched, so a concurrent writer's record survives. A null means the
+      // record is gone from this file.
       try {
-        content = JSON.stringify(
-          { ...JSON.parse(fresh.text), ...op.patch }, null, 2) + "\n";
-      } catch { /* remote unparsable — write ours whole */ }
-    }
-    if (op.path === LIB_FILE && op.patch && fresh) {
-      // library.json is a map; a null in the patch is a tombstone for a key
-      // this write removed (an old bare-guid record that has been re-keyed).
-      try {
-        const merged = { ...JSON.parse(fresh.text), ...op.patch };
+        const merged = { ...JSON.parse(fresh.text), ...patch };
         for (const k of Object.keys(merged)) if (merged[k] === null) delete merged[k];
         content = JSON.stringify(merged, null, 2) + "\n";
       } catch { /* remote unparsable — write ours whole */ }
@@ -1761,12 +1891,12 @@ async function pushOp(op) {
     res = await putFile(op.path, content, commitMessage(op),
                         fresh ? fresh.sha : undefined);
     if (res.status === 409 || res.status === 422) return "conflict";
-    op.content = content;
+    op.mergedContent = content;
   }
 
   if (!res.ok) { const e = new Error("PUT " + res.status); e.status = res.status; throw e; }
   const json = await res.json();
-  recordWriteInCache(op.path, op.content, json.content.sha);
+  recordWriteInCache(op.path, op.mergedContent || body, json.content.sha);
   return "done";
 }
 
@@ -1884,6 +2014,13 @@ function renderQueuePanel() {
 
 function renderConflictBanner() {
   const banner = document.getElementById("conflict-banner");
+  // A storage failure outranks a conflict: nothing else the app says is
+  // trustworthy while it cannot record what it just did.
+  if (storageBlocked) {
+    banner.textContent = storageBlocked;
+    banner.classList.add("open");
+    return;
+  }
   const conflicts = queueOps().filter(o => o.state === "conflict");
   if (conflicts.length === 0) {
     banner.classList.remove("open");
@@ -1911,7 +2048,14 @@ document.getElementById("queue-retry").addEventListener("click", () => {
   flushQueue();
 });
 
-document.getElementById("reload-data").addEventListener("click", () => loadData());
+document.getElementById("reload-data").addEventListener("click", () => {
+  // The cache is the biggest thing in localStorage; dropping it is the
+  // realistic way out of a full quota.
+  storageBlocked = null;
+  storageError = null;
+  lsSet(LS_CACHE, { treeSha: null, files: {} });
+  loadData();
+});
 
 /* people.json lives in the data repo, read/written via the same API path.
    Doubles as the demonstrable test write for the wifi-kill acceptance test. */
@@ -1920,9 +2064,13 @@ document.getElementById("person-add").addEventListener("click", () => {
   const name = input.value.trim();
   if (!name) return;
   if (store.people.includes(name)) { input.value = ""; return; }
-  const next = [...store.people, name];
-  if (!enqueueWrite("people.json", JSON.stringify(next, null, 2) + "\n",
-                    "add person " + name)) return;
+  const prev = store.people;
+  store.people = [...store.people, name];
+  if (!enqueueOp("people.json", "people", null, "add person " + name)) {
+    store.people = prev;
+    return;
+  }
+  renderPeopleDatalist();
   input.value = "";
 });
 
@@ -2488,7 +2636,7 @@ function commitRecord() {
 
   const path = "items/" + id + ".json";
   const summary = (verb + " " + id + " " + item.description).trim();
-  enqueueItemWrite(path, JSON.stringify(item, null, 2) + "\n", summary);
+  writeItem(item, summary);
 
   const existing = survey.session.find(s => s.path === survey.editingPath);
   if (existing) { existing.path = path; existing.id = id; }
@@ -2659,9 +2807,22 @@ function writeLogEvent(ev) {
     qty_after: ev.qty_after, ref: ev.ref ?? null, reason: ev.reason ?? ""
   };
   const path = "log/" + full.ts.slice(0, 7) + "/" + crypto.randomUUID() + ".json";
-  enqueueWrite(path, JSON.stringify(full, null, 2) + "\n",
+  store.logEvents[path] = full;
+  enqueueOp(path, "log", null,
     "log " + full.item_id + " " + full.type +
     (full.delta ? " " + (full.delta > 0 ? "+" : "") + full.delta : ""));
+}
+
+/* Every item write goes through here: the store is the source the flush
+   rebuilds from, so it is updated first. */
+function writeItem(item, summary) {
+  const prev = store.items[item.id];
+  store.items[item.id] = item;
+  if (!enqueueOp("items/" + item.id + ".json", "item", item.id, summary)) {
+    if (prev) store.items[item.id] = prev; else delete store.items[item.id];
+    return false;
+  }
+  return true;
 }
 
 /* ---- Qty corrections: optimistic immediately, committed after a beat so
@@ -2694,8 +2855,7 @@ function commitQty(id) {
     updated_at: new Date().toISOString(),
     updated_by: authName()
   };
-  enqueueItemWrite("items/" + id + ".json",
-    JSON.stringify(updated, null, 2) + "\n",
+  writeItem(updated,
     id + " qty " + (edit.from == null ? "—" : edit.from) + "→" + item.qty_on_hand);
   writeLogEvent({
     item_id: id, type: "correction",
@@ -3214,9 +3374,7 @@ function saveDrawer() {
     updated_at: new Date().toISOString(),
     updated_by: authName()
   };
-  enqueueItemWrite("items/" + item.id + ".json",
-    JSON.stringify(updated, null, 2) + "\n",
-    ("update " + item.id + " " + updated.description).trim());
+  writeItem(updated, ("update " + item.id + " " + updated.description).trim());
   closeDrawer();
 }
 
@@ -3229,9 +3387,7 @@ function setArchived(id, archived) {
     updated_at: new Date().toISOString(),
     updated_by: authName()
   };
-  enqueueItemWrite("items/" + id + ".json",
-    JSON.stringify(updated, null, 2) + "\n",
-    (archived ? "archive " : "unarchive ") + id);
+  writeItem(updated, (archived ? "archive " : "unarchive ") + id);
   writeLogEvent({
     item_id: id, type: archived ? "archive" : "correction",
     delta: 0, qty_after: item.qty_on_hand,
@@ -3536,6 +3692,16 @@ function libRecordFromRaw(raw) {
    library_id their import_file implies. Any write after that persists the
    new keys; obsolete keys are tombstoned so the merge drops them. */
 let libraryObsoleteKeys = [];
+let legacyLibraryIds = [];   // libraries still living in the combined file
+
+/* A library file names its library; the id inside a record wins if present,
+   since a file can be renamed on disk. */
+function libraryIdOfFile(path, data) {
+  for (const rec of Object.values(obj(data))) {
+    if (isPlainObject(rec) && rec.library_id) return rec.library_id;
+  }
+  return path.slice(LIB_DIR.length).replace(/\.json$/, "");
+}
 
 function migrateLibrary(data) {
   libraryObsoleteKeys = [];
@@ -3890,6 +4056,7 @@ function renderLibrarySummary() {
 /* Every surface that reads library.json, refreshed together. */
 function afterLibraryChange() {
   renderLibrarySummary();
+  renderLegacyBanner();
   renderLibraryIdList();
   buildCribChips();
   renderCrib();
@@ -4188,16 +4355,11 @@ function commitImport() {
       last_seen_in_library: existing.last_import || null
     };
   }
-  for (const oldKey of libraryObsoleteKeys) patch[oldKey] = null; // tombstone
-
-  const next = { ...store.library };
-  for (const [k, v] of Object.entries(patch)) {
-    if (v === null) delete next[k]; else next[k] = v;
-  }
-  const ok = enqueueWrite(LIB_FILE, JSON.stringify(next, null, 2) + "\n",
-    "import library: " + file.name, patch);
+  // One library, one file: the import writes library/<library_id>.json and
+  // touches nothing else, which is also what keeps every file well under the
+  // Contents API's 1 MB ceiling.
+  const ok = writeLibraryPatch(patch, "import library: " + file.name);
   if (!ok) return;
-  libraryObsoleteKeys = [];
 
   const newCount = d.create.length;
   resetImport();
@@ -4222,6 +4384,43 @@ function stampPresetAuthor(presets, by) {
     ...p,
     history: (p.history || []).map(h => h.by ? h : { ...h, by })
   }));
+}
+
+/* ---- Migration: combined library.json -> library/<library_id>.json ------
+   Read as one file, written back as one file per library. Each library is
+   its own commit; that is the Contents API, one PUT per file. */
+
+function migrateLibraryStorage() {
+  if (!legacyLibraryIds.length) return false;
+  if (!requireIdentity(migrateLibraryStorage)) return false;
+  const ids = [...legacyLibraryIds];
+  for (const id of ids) {
+    if (!enqueueOp(libFilePath(id), "library", id,
+                   "split library storage: " + id, keysForLibrary(id))) return false;
+  }
+  // Emptied rather than deleted — the app never hard-deletes, and an empty
+  // map ingests as nothing.
+  if (!enqueueOp(LIB_FILE, "legacy-blank", null,
+                 "split library storage: retire the combined file")) return false;
+  legacyLibraryIds = [];
+  renderLegacyBanner();
+  return true;
+}
+
+function renderLegacyBanner() {
+  const host = document.getElementById("legacy-banner");
+  if (!host) return;
+  host.textContent = "";
+  if (!legacyLibraryIds.length) { host.hidden = true; return; }
+  host.hidden = false;
+  host.appendChild(el("div", null,
+    `${legacyLibraryIds.length} librar${legacyLibraryIds.length === 1 ? "y is" : "ies are"} ` +
+    "still in the single combined library.json. Split into one file per " +
+    "library: smaller writes, and no file anywhere near the 1 MB read limit."));
+  const b = el("button", "btn-small", "Split now");
+  b.type = "button";
+  b.addEventListener("click", () => { migrateLibraryStorage(); renderReconcile(); });
+  host.appendChild(b);
 }
 
 /* ---- Drop zone wiring ---- */
@@ -4582,9 +4781,7 @@ function writeLink(records, item, rows) {
 
   if (rows && rows.some(r => r.take === "lib")) {
     const updated = { ...applyRowsToItem(item, rows), updated_at: now, updated_by: by };
-    enqueueItemWrite("items/" + item.id + ".json",
-      JSON.stringify(updated, null, 2) + "\n",
-      "reconcile: " + item.id + " ← " + libDesc(records[0]));
+    writeItem(updated, "reconcile: " + item.id + " ← " + libDesc(records[0]));
   }
   const patch = {};
   for (const rec of records) {
@@ -4596,12 +4793,35 @@ function writeLink(records, item, rows) {
     (records.length > 1 ? " (+" + (records.length - 1) + " more)" : ""));
 }
 
+/* Applies a keyed patch to the store, then queues one op per library file the
+   patch actually touched — a link that spans two libraries writes two files
+   and leaves the other twelve alone. */
 function writeLibraryPatch(patch, summary) {
-  const next = { ...store.library };
-  for (const [k, v] of Object.entries(patch)) {
-    if (v === null) delete next[k]; else next[k] = v;
+  const before = {};
+  const libs = new Map();
+  for (const [key, rec] of Object.entries(patch)) {
+    before[key] = store.library[key];
+    const libraryId = rec ? rec.library_id : (store.library[key] || {}).library_id;
+    if (rec === null) delete store.library[key]; else store.library[key] = rec;
+    if (!libraryId) continue;
+    if (!libs.has(libraryId)) libs.set(libraryId, []);
+    libs.get(libraryId).push(key);
   }
-  return enqueueWrite(LIB_FILE, JSON.stringify(next, null, 2) + "\n", summary, patch);
+  const done = [];
+  for (const [libraryId, keys] of libs) {
+    if (enqueueOp(libFilePath(libraryId), "library", libraryId, summary, keys)) {
+      done.push(libraryId);
+      continue;
+    }
+    // Roll the store back so the UI never shows a change that was not queued.
+    for (const [key, rec] of Object.entries(before)) {
+      if (rec === undefined) delete store.library[key]; else store.library[key] = rec;
+    }
+    afterLibraryChange();
+    return false;
+  }
+  afterLibraryChange();
+  return done.length > 0;
 }
 
 function markNotStocked(records) {
@@ -4620,9 +4840,7 @@ function markNoFusionEquivalent(item) {
   if (!requireIdentity()) return false;
   const updated = { ...item, no_fusion_equivalent: true,
     updated_at: new Date().toISOString(), updated_by: authName() };
-  return enqueueItemWrite("items/" + item.id + ".json",
-    JSON.stringify(updated, null, 2) + "\n",
-    "reconcile: " + item.id + " has no Fusion equivalent");
+  return writeItem(updated, "reconcile: " + item.id + " has no Fusion equivalent");
 }
 
 /* Seeded from the library record, linked on creation. Quantity is left
@@ -4666,8 +4884,7 @@ function createItemFromLibrary(records) {
     created_from_library: rec.key,
     updated_at: now, updated_by: by
   };
-  if (!enqueueItemWrite("items/" + id + ".json",
-    JSON.stringify(item, null, 2) + "\n",
+  if (!writeItem(item,
     "add " + id + " " + item.description + " (from " + (rec.library_id || "library") + ")")) {
     return false;
   }

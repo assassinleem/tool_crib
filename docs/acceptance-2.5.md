@@ -16,6 +16,12 @@ and confirm the sync panel reads **build phase-2.5** or later before starting.
 Fixture files are the two real Fusion exports, `SHOP_TOOLS.tools` (134 tools)
 and `SHOP_TOOLS_1.tools` (137 tools, 113 guids shared with the first).
 
+Library records live one file per library, `library/<library_id>.json`, keyed
+by guid. An import writes only its own library's file. If the Import screen
+shows a "Split now" banner, the data repo still holds the old combined
+`library.json`; press it before running these, and expect one commit per
+library plus one that empties the combined file.
+
 ---
 
 ## Check 1 — a re-import of an unchanged library is a no-op
