@@ -952,6 +952,87 @@
   .preset-row .psrc { color: var(--text-2); }
   .preset-row.conflict .pname { color: var(--warn); }
 
+  /* ---- Library record inspector (read-only) ---- */
+
+  .lib-inspector { z-index: 60; width: min(760px, 100%); }
+
+  .lib-inspector .badge.ro {
+    background: var(--surface-2);
+    color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+
+  .insp-grid {
+    display: grid;
+    grid-template-columns: 130px 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 12px;
+  }
+
+  .insp-grid > div { background: var(--surface); padding: 5px 8px; overflow-wrap: anywhere; }
+  .insp-h { color: var(--text-2); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
+  .insp-k { color: var(--text-2); }
+  .insp-v.differs { color: var(--warn); }
+
+  .insp-presets {
+    margin-top: 4px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 12px;
+  }
+
+  .ip-row {
+    display: grid;
+    grid-template-columns: 1.5fr 1.6fr 0.7fr 0.9fr 0.7fr 1.5fr;
+    gap: 8px;
+    padding: 5px 10px;
+    border-top: 1px solid var(--border);
+    min-width: 620px;
+    overflow-wrap: anywhere;
+  }
+
+  .ip-row:first-child { border-top: none; }
+  .ip-head { color: var(--text-2); text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
+  .ip-row.added { box-shadow: inset 3px 0 var(--ok); }
+  .ip-row.kept-orphan { box-shadow: inset 3px 0 var(--warn); }
+  .ip-row .missing { color: var(--low); font-style: italic; }
+
+  .insp-raw {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    margin-top: 6px;
+    max-height: 300px;
+    overflow: auto;
+    font-size: 11px;
+    white-space: pre;
+  }
+
+  .lib-inspector details > summary {
+    cursor: pointer;
+    padding: 6px 0;
+    color: var(--text-2);
+    font-size: 13px;
+  }
+
+  .recon-note.blocked {
+    background: #3a1418;
+    border-color: var(--low);
+    color: var(--low);
+    display: block;
+  }
+
+  .change.bad .tag { color: var(--low); }
+  .change.bad { box-shadow: inset 3px 0 var(--low); }
+  .change-list .change.clickable { cursor: pointer; }
+  .change-list .change.clickable:hover { background: var(--surface-2); }
+
   /* ---- Conflict banner ---- */
 
   .conflict-banner {
@@ -1121,6 +1202,7 @@
 </div>
 
 <div class="drawer" id="drawer"></div>
+<div class="drawer lib-inspector" id="lib-inspector"></div>
 
 <div class="conflict-banner" id="conflict-banner"></div>
 
@@ -3462,7 +3544,8 @@ function migrateLibrary(data) {
   for (const [key, rec] of Object.entries(data)) {
     if (!isPlainObject(rec)) continue;   // null tombstone from a merged write
     if (key.includes(LIB_KEY_SEP) || isLocalLibId(key)) {
-      out[key] = rec.presets ? rec : { ...rec, presets: rec.presets || [] };
+      const libId = rec.library_id || key.split(LIB_KEY_SEP)[0];
+      out[key] = { ...rec, presets: normalizePresetEntries(rec, libId) };
       continue;
     }
     const library_id = rec.library_id ||
@@ -3470,12 +3553,7 @@ function migrateLibrary(data) {
     const guid = rec.guid || key;
     const next = libKey(library_id, guid);
     out[next] = { ...rec, key: next, library_id, guid,
-                  presets: Array.isArray(rec.presets) ? rec.presets
-                    : rawPresets(rec.raw).map(pr => ({
-                        key: presetKey(pr), guid: isPlainObject(pr) && typeof pr.guid === "string" ? pr.guid : null,
-                        raw: pr, first_seen: rec.last_import || null,
-                        last_seen: { library: library_id, date: rec.last_import || null },
-                        history: [] })) };
+                  presets: normalizePresetEntries(rec, library_id) };
     libraryObsoleteKeys.push(key);
   }
   return out;
@@ -3506,6 +3584,76 @@ function libraryIds() {
    appearing keeps its last_seen and says so. Merge key is the preset guid,
    which survives being copied between libraries. */
 
+/* A stored preset is an ENTRY: { key, guid, raw, first_seen, last_seen,
+   history }, where raw is the verbatim Fusion preset. Early builds stored a
+   normalized projection instead ({ name, v_c, ... }, guid dropped), which has
+   no key and can therefore never match an incoming preset — every import
+   would read the whole set as new and keep the whole old set as orphans,
+   doubling the count each time. Anything not entry-shaped is rebuilt from
+   raw, which is authoritative and carries the guids. */
+function isPresetEntry(e) {
+  return isPlainObject(e) && isPlainObject(e.raw) && typeof e.key === "string";
+}
+
+function makePresetEntry(pr, libraryId, date) {
+  return {
+    key: presetKey(pr),
+    guid: isPlainObject(pr) && typeof pr.guid === "string" ? pr.guid : null,
+    raw: isPlainObject(pr) ? pr : {},
+    first_seen: date,
+    last_seen: { library: libraryId, date },
+    history: []
+  };
+}
+
+function presetNameKey(pr) { return str(obj(pr).name).trim().toLowerCase(); }
+
+function normalizePresetEntries(rec, libraryId) {
+  const stored = Array.isArray(rec.presets) ? rec.presets : [];
+  if (stored.length && stored.every(isPresetEntry)) return stored;
+
+  const date = rec.last_import || null;
+  const fromRaw = rawPresets(rec.raw);
+  const oldByKey = new Map(), oldByName = new Map();
+  for (const e of stored) {
+    if (isPresetEntry(e)) {
+      oldByKey.set(e.key, e);
+      const n = presetNameKey(e.raw);
+      if (n) oldByName.set(n, e);
+    } else if (isPlainObject(e)) {
+      const n = presetNameKey(e);
+      if (n) oldByName.set(n, e);
+    }
+  }
+
+  const out = [], used = new Set(), seenKeys = new Set();
+  for (const pr of fromRaw) {
+    const entry = makePresetEntry(pr, libraryId, date);
+    if (seenKeys.has(entry.key)) continue;
+    const prev = oldByKey.get(entry.key) || oldByName.get(presetNameKey(pr));
+    if (prev) {
+      used.add(prev);
+      if (isPresetEntry(prev)) {
+        entry.first_seen = prev.first_seen || entry.first_seen;
+        entry.last_seen = prev.last_seen || entry.last_seen;
+        entry.history = Array.isArray(prev.history) ? prev.history : [];
+      }
+    }
+    seenKeys.add(entry.key);
+    out.push(entry);
+  }
+  // Never drop a preset: anything stored that raw no longer carries stays,
+  // and a store already doubled by the old bug collapses back on the key.
+  for (const e of stored) {
+    if (used.has(e)) continue;
+    const entry = isPresetEntry(e) ? e : makePresetEntry(e, libraryId, date);
+    if (seenKeys.has(entry.key)) continue;
+    seenKeys.add(entry.key);
+    out.push(entry);
+  }
+  return out;
+}
+
 function presetKey(p) {
   const g = obj(p).guid;
   if (typeof g === "string" && g.trim()) return g.trim();
@@ -3528,16 +3676,34 @@ function mergePresets(existing, incoming, libraryId, now, by) {
   }
   const added = [], changed = [], seen = new Set();
 
+  // Guid matching wins. A stored entry that never had a guid (an early build
+  // dropped it) can only be matched on name; adopting the incoming key means
+  // it matches directly from then on.
+  const byName = new Map();
+  for (const e of out) {
+    if (e.guid) continue;
+    const n = presetNameKey(e.raw);
+    if (n && !byName.has(n)) byName.set(n, e);
+  }
+
   for (const p of (Array.isArray(incoming) ? incoming : [])) {
     const key = presetKey(p);
     seen.add(key);
-    const prev = byKey.get(key);
+    let prev = byKey.get(key);
     if (!prev) {
-      const entry = {
-        key, guid: typeof obj(p).guid === "string" ? p.guid : null,
-        raw: p, first_seen: now, last_seen: { library: libraryId, date: now },
-        history: []
-      };
+      const n = presetNameKey(p);
+      const byNameHit = n ? byName.get(n) : null;
+      if (byNameHit && !seen.has(byNameHit.key)) {
+        prev = byNameHit;
+        byKey.delete(prev.key);
+        prev.key = key;
+        prev.guid = typeof obj(p).guid === "string" ? p.guid : prev.guid;
+        byKey.set(key, prev);
+        byName.delete(n);
+      }
+    }
+    if (!prev) {
+      const entry = makePresetEntry(p, libraryId, now);
       byKey.set(key, entry);
       out.push(entry);
       added.push(entry);
@@ -3620,7 +3786,7 @@ function rawPresets(raw) {
 
 function diffLibrary(parsed, libraryId) {
   const seen = new Set();
-  const create = [], update = [], skip = [], stale = [];
+  const create = [], update = [], skip = [], stale = [], suspects = [];
   let unchanged = 0, flagged = 0;
   const now = new Date().toISOString();
 
@@ -3650,12 +3816,18 @@ function diffLibrary(parsed, libraryId) {
     const legacy = !isPlainObject(existing.raw);
     const paths = legacy ? [] : rawPathsIgnoringPresets(existing.raw, rec.raw);
     const presetChurn = merge.added.length + merge.changed.length;
+    // A merge that adds presets while orphaning exactly as many is not a
+    // merge, it is a key mismatch about to double the set. Never write it.
+    const suspect = merge.added.length > 0 &&
+                    merge.added.length === merge.missing.length;
     if (!legacy && paths.length === 0 && presetChurn === 0 && !existing.stale_in_library) {
       unchanged++;
       continue;
     }
-    update.push({ key, rec, derived, existing, paths, merge, legacy,
-                  revived: !!existing.stale_in_library });
+    const row = { key, rec, derived, existing, paths, merge, legacy, suspect,
+                  revived: !!existing.stale_in_library };
+    update.push(row);
+    if (suspect) suspects.push(row);
   }
 
   // A guid that stops appearing in ITS OWN library is flagged and dated.
@@ -3669,7 +3841,7 @@ function diffLibrary(parsed, libraryId) {
     stale.push({ key, existing });
   }
 
-  return { create, update, skip, stale, unchanged,
+  return { create, update, skip, stale, suspects, unchanged,
            skipped: skip.length, flagged, seen, libraryId, now };
 }
 
@@ -3784,7 +3956,8 @@ function renderImportPreview() {
 
   const rows = [
     ...d.create.map(c => ({ cls: "new", tag: "new", rec: c.rec, derived: c.derived, chg: c })),
-    ...d.update.map(u => ({ cls: "upd", tag: u.revived ? "back" : "updated",
+    ...d.update.map(u => ({ cls: u.suspect ? "bad" : "upd",
+                            tag: u.suspect ? "check" : (u.revived ? "back" : "updated"),
                             rec: u.rec, derived: u.derived, chg: u })),
     ...d.stale.map(s => ({ cls: "arch", tag: "stale", rec: s.existing,
                            derived: deriveLib(s.existing), chg: null,
@@ -3829,6 +4002,11 @@ function renderImportPreview() {
         parts.push(`+ ${row.chg.paths.length - PATHS_SHOWN} more fields`);
       }
     }
+    if (row.chg && row.chg.suspect) {
+      parts.push('<span class="was">preset keys did not match — ' +
+        row.chg.merge.added.length + " would be added and the same number kept " +
+        "as orphans. Open this row to see why.</span>");
+    }
     if (row.chg && row.chg.merge) {
       const m = row.chg.merge;
       if (m.added.length && row.cls !== "new") {
@@ -3865,6 +4043,15 @@ function renderImportPreview() {
     body.appendChild(sub);
     el.appendChild(tag);
     el.appendChild(body);
+    // Any row opens the inspector: stored on the left, incoming on the right.
+    if (row.cls !== "skip") {
+      el.classList.add("clickable");
+      el.title = "Open the record inspector";
+      el.addEventListener("click", () => openLibInspector(
+        row.chg ? row.chg.existing : (row.cls === "arch" ? row.rec : null),
+        row.rec && row.rec.raw ? row.rec : null,
+        d.libraryId));
+    }
     list.appendChild(el);
   }
   if (rows.length > PREVIEW_CAP) {
@@ -3877,14 +4064,25 @@ function renderImportPreview() {
   host.appendChild(list);
 
   const writes = d.create.length + d.update.length + d.stale.length;
+  const blocked = d.suspects.length > 0;
+  if (blocked) {
+    const warn = el("div", "recon-note blocked");
+    warn.appendChild(el("div", null,
+      `Import blocked. ${d.suspects.length} tool` + (d.suspects.length > 1 ? "s" : "") +
+      " would gain presets while keeping exactly as many as \u201cnot in this file\u201d. " +
+      "That is a merge-key mismatch, not a merge — writing it would double the " +
+      "preset set, and again on every import after. Open a flagged row to see " +
+      "which key the merge used and why it missed."));
+    host.appendChild(warn);
+  }
   const actions = document.createElement("div");
   actions.className = "import-actions";
   const confirm = document.createElement("button");
   confirm.type = "button";
   confirm.className = "btn-small";
-  confirm.textContent = "Import " + (writes || "nothing");
-  confirm.disabled = writes === 0;
-  if (writes === 0) confirm.style.opacity = "0.5";
+  confirm.textContent = blocked ? "Import blocked" : "Import " + (writes || "nothing");
+  confirm.disabled = writes === 0 || blocked;
+  if (confirm.disabled) confirm.style.opacity = "0.5";
   confirm.addEventListener("click", commitImport);
   const cancel = document.createElement("button");
   cancel.type = "button";
@@ -3948,6 +4146,7 @@ function commitImport() {
   const d = importState.diff;
   const file = importState.file;
   if (!d || !file) return;
+  if (d.suspects.length) return;   // the preview blocks it; never write it
   if (!requireIdentity(commitImport)) return;
 
   const now = d.now;
@@ -4635,6 +4834,7 @@ function renderQueueTab(host) {
       });
     link.disabled = g.selected < 0;
     if (g.selected < 0) link.style.opacity = "0.5";
+    mk("btn-ghost", "Inspect", () => openLibInspector(g.records[0], null, g.records[0].library_id));
     mk("btn-ghost", "Search…", () => openPicker(g.records));
     mk("btn-ghost", "Create crib item", () => { if (createItemFromLibrary(g.records)) renderReconcile(); });
     mk("btn-ghost", "Not stocked", () => { if (markNotStocked(g.records)) renderReconcile(); });
@@ -4694,6 +4894,8 @@ function renderStaleTab(host) {
       rec.library_id + " · last seen " +
       String(rec.last_seen_in_library || rec.stale_since || "").slice(0, 10) +
       (rec.crib_item_id ? " · linked to " + rec.crib_item_id : "")));
+    row.style.cursor = "pointer";
+    row.addEventListener("click", () => openLibInspector(rec, null, rec.library_id));
     host.appendChild(row);
   }
 }
@@ -4908,6 +5110,9 @@ function renderFusionSection(item) {
       (rec.stale_in_library ? " · stale since " +
         String(rec.stale_since || "").slice(0, 10) : "");
     row.appendChild(meta);
+    row.style.cursor = "pointer";
+    row.title = "Open the record inspector";
+    row.addEventListener("click", () => openLibInspector(rec, null, rec.library_id));
     box.appendChild(row);
   }
   drawerEl.appendChild(box);
@@ -4954,6 +5159,220 @@ function renderFusionSection(item) {
   }
   drawerEl.appendChild(plist);
 }
+
+
+/* ================= Library record inspector =============================
+   Read-only, on purpose. When a merge does something surprising the question
+   is always "what shape is the stored record actually in", and the answer has
+   to be visible without a console. Stored on the left, incoming on the right,
+   with the merge outcome per preset row so it is obvious which key the merge
+   used and why it missed. Editing lives in Reconcile. ------------------- */
+
+const inspector = { open: false, stored: null, incoming: null, libraryId: "" };
+
+function deepCopy(v) { try { return JSON.parse(JSON.stringify(v)); } catch { return v; } }
+
+/* Runs the real merge on copies, so the outcomes shown are the outcomes that
+   would happen — not a second implementation that could disagree with it. */
+function presetComparison(stored, incoming, libraryId) {
+  const storedEntries = Array.isArray(stored && stored.presets) ? stored.presets : [];
+  const incomingRaw = incoming ? rawPresets(incoming.raw) : [];
+  const rows = new Map();
+  storedEntries.forEach((e, i) => {
+    // An entry with no key is exactly the shape that breaks the merge; give
+    // it a row of its own rather than collapsing them all onto `undefined`.
+    const id = typeof e.key === "string" ? e.key : "\u0000noshape:" + i;
+    rows.set(id, { key: id, stored: e, incoming: null, outcome: "kept-orphan" });
+  });
+  if (!incoming) return [...rows.values()];
+
+  const m = mergePresets(deepCopy(storedEntries), incomingRaw, libraryId,
+                         new Date().toISOString(), "");
+  const addedKeys = new Set(m.added.map(e => e.key));
+  const changedKeys = new Set(m.changed.map(e => e.key));
+  const missingKeys = new Set(m.missing.map(e => e.key));
+
+  for (const pr of incomingRaw) {
+    const key = presetKey(pr);
+    const merged = m.presets.find(e => e.key === key);
+    let row = rows.get(key);
+    if (!row) {
+      // The merge may have re-keyed a stored entry onto the incoming key
+      // (the name fallback); find it so the row shows as matched, not added.
+      const reKeyed = merged && storedEntries.find(e =>
+        e.key === key || presetNameKey(e.raw) === presetNameKey(pr));
+      row = { key, stored: reKeyed || null, incoming: pr, outcome: "added" };
+      if (reKeyed) rows.delete(reKeyed.key);
+      rows.set(key, row);
+    }
+    row.incoming = pr;
+    row.outcome = addedKeys.has(key) ? "added"
+      : changedKeys.has(key) ? "matched (values changed)"
+      : "matched";
+  }
+  return [...rows.values()];
+}
+
+function presetCell(pr, field) {
+  const v = obj(pr)[field];
+  return v === undefined || v === null || v === "" ? "—" : shortVal(v);
+}
+
+/* The whole point of the guid/name columns: a missing one has to shout. */
+function idCell(pr, field) {
+  const v = obj(pr)[field];
+  if (typeof v === "string" && v.trim()) return esc(v.trim());
+  return '<span class="missing">no ' + field + "</span>";
+}
+
+function openLibInspector(stored, incoming, libraryId) {
+  inspector.open = true;
+  inspector.stored = stored || null;
+  inspector.incoming = incoming || null;
+  inspector.libraryId = libraryId ||
+    (stored && stored.library_id) || (importState.libraryId || "");
+  renderLibInspector();
+}
+
+function closeLibInspector() {
+  inspector.open = false;
+  document.getElementById("lib-inspector").classList.remove("open");
+}
+
+const DERIVED_ROWS = [
+  ["description", d => d.description],
+  ["type", d => d.type],
+  ["kind", d => d.kind],
+  ["unit", d => d.unit],
+  ["product id", d => d.product_id],
+  ["vendor", d => d.vendor],
+  ["dia (DC)", d => d.dia],
+  ["flutes (NOF)", d => d.flutes],
+  ["corner rad (RE)", d => d.corner_radius],
+  ["geometry", d => d.geometry],
+  ["holder", d => d.holder],
+  ["holder hash", d => d.holder_hash],
+  ["post number", d => d.post_number],
+  ["presets in raw", d => rawPresets(d.raw).length]
+];
+
+function renderLibInspector() {
+  const host = document.getElementById("lib-inspector");
+  if (!inspector.open) { host.classList.remove("open"); return; }
+  host.classList.add("open");
+  host.textContent = "";
+
+  const stored = inspector.stored, incoming = inspector.incoming;
+  const head = el("div", "drawer-head");
+  const h2 = document.createElement("h2");
+  h2.textContent = libDesc(stored || incoming);
+  head.appendChild(h2);
+  const ro = el("span", "badge ro", "read-only");
+  head.appendChild(ro);
+  const close = el("button", "drawer-close", "×");
+  close.type = "button";
+  close.title = "Close (Esc)";
+  close.addEventListener("click", closeLibInspector);
+  head.appendChild(close);
+  host.appendChild(head);
+
+  const keyLine = el("div", "recon-sub mono",
+    (stored ? stored.key : libKey(inspector.libraryId, (incoming || {}).guid)) +
+    (stored ? "" : "  (not stored yet)"));
+  host.appendChild(keyLine);
+
+  const flags = [];
+  if (stored) {
+    flags.push("link: " + linkState(stored));
+    if (stored.crib_item_id) flags.push("→ " + stored.crib_item_id);
+    if (stored.stale_in_library) flags.push("stale since " + String(stored.stale_since || "").slice(0, 10));
+    if (stored.archived) flags.push("archived");
+    flags.push("stored presets: " + (Array.isArray(stored.presets) ? stored.presets.length : 0));
+    const bad = (stored.presets || []).filter(e => !isPresetEntry(e)).length;
+    if (bad) flags.push(bad + " preset(s) not in entry shape");
+  }
+  if (incoming) flags.push("incoming presets: " + rawPresets(incoming.raw).length);
+  host.appendChild(el("div", "recon-sub", flags.join(" · ")));
+
+  // ---- derived view, side by side ----
+  host.appendChild(el("div", "drawer-section-title", "Parsed view"));
+  const dS = stored ? deriveLib(stored) : null;
+  const dI = incoming ? deriveLib(incoming) : null;
+  const grid = el("div", "insp-grid");
+  grid.appendChild(el("div", "insp-h", ""));
+  grid.appendChild(el("div", "insp-h", "stored"));
+  grid.appendChild(el("div", "insp-h", incoming ? "incoming" : "—"));
+  for (const [label, get] of DERIVED_ROWS) {
+    const a = dS ? get(dS) : undefined;
+    const b = dI ? get(dI) : undefined;
+    const differs = dS && dI && stableStringify(a ?? null) !== stableStringify(b ?? null);
+    grid.appendChild(el("div", "insp-k", label));
+    grid.appendChild(el("div", "insp-v" + (differs ? " differs" : ""), dS ? shortVal(a) : "—"));
+    grid.appendChild(el("div", "insp-v" + (differs ? " differs" : ""), dI ? shortVal(b) : "—"));
+  }
+  host.appendChild(grid);
+
+  // ---- presets ----
+  const rows = presetComparison(stored, incoming, inspector.libraryId);
+  host.appendChild(el("div", "drawer-section-title", "Presets (" + rows.length + ")"));
+  const table = el("div", "insp-presets");
+  const hdr = el("div", "ip-row ip-head");
+  for (const c of ["guid", "name", "v_c", "f_z / f_n", "side", "merge outcome"]) {
+    hdr.appendChild(el("div", null, c));
+  }
+  table.appendChild(hdr);
+  if (!rows.length) table.appendChild(el("div", "change-more", "No presets on either side."));
+  for (const r of rows) {
+    // Read the stored side as it actually is: an entry keeps its preset under
+    // .raw, a malformed one IS the preset object.
+    const stored = r.stored
+      ? (isPresetEntry(r.stored) ? r.stored.raw : r.stored) : null;
+    const pr = r.incoming || stored || {};
+    const line = el("div", "ip-row " + r.outcome.split(" ")[0]);
+    const g = document.createElement("div");
+    g.innerHTML = idCell(pr, "guid");
+    line.appendChild(g);
+    const n = document.createElement("div");
+    n.innerHTML = idCell(pr, "name");
+    line.appendChild(n);
+    line.appendChild(el("div", null, presetCell(pr, "v_c")));
+    line.appendChild(el("div", null,
+      obj(pr).f_z !== undefined ? presetCell(pr, "f_z") : presetCell(pr, "f_n")));
+    line.appendChild(el("div", null,
+      r.stored && r.incoming ? "both" : r.stored ? "stored" : "incoming"));
+    line.appendChild(el("div", null, r.outcome));
+    table.appendChild(line);
+  }
+  host.appendChild(table);
+
+  // ---- raw, collapsed ----
+  host.appendChild(el("div", "drawer-section-title", "Raw"));
+  for (const [label, rec] of [["stored", stored], ["incoming", incoming]]) {
+    if (!rec) continue;
+    const det = document.createElement("details");
+    const sum = document.createElement("summary");
+    sum.textContent = label + " raw JSON";
+    det.appendChild(sum);
+    const text = JSON.stringify(rawForExport(rec), null, 2);
+    const copy = el("button", "btn-ghost", "Copy");
+    copy.type = "button";
+    copy.addEventListener("click", () => {
+      navigator.clipboard.writeText(text).then(
+        () => { copy.textContent = "Copied"; setTimeout(() => copy.textContent = "Copy", 1200); },
+        () => { copy.textContent = "Copy failed"; });
+    });
+    det.appendChild(copy);
+    const pre = document.createElement("pre");
+    pre.className = "insp-raw mono";
+    pre.textContent = text;
+    det.appendChild(pre);
+    host.appendChild(det);
+  }
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && inspector.open) closeLibInspector();
+});
 
 /* ---- Boot ---- */
 

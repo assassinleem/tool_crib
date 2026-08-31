@@ -36,6 +36,32 @@ to trigger.
 **Status: PASS.** Second import reported `{new: 0, updated: 0, unchanged: 134}`,
 0 archived records in the store, no "archive" text rendered.
 
+### Check 1b — the same, over a store an earlier build wrote
+
+Check 1 on its own does **not** catch a merge-key mismatch, because a store
+built by the current code always matches itself. Run it again over records
+written by an earlier build — that is the case that broke.
+
+**Steps.** With `library.json` holding records from before the composite key
+(bare guid keys, or a `presets` array of `{name, v_c, …}` rather than merge
+entries), import that library's own file unchanged.
+
+**Expect.** Still 0 new / 0 updated / N unchanged, and the total number of
+stored preset entries **must not grow**:
+
+```js
+Object.values(store.library).reduce((n, r) => n + r.presets.length, 0)
+// same before and after the import
+```
+
+If instead every row reads `+N presets … N presets not in this file — kept:
+(unnamed preset)`, the stored presets are not in merge-entry shape and the
+import is about to double them. The import is blocked in that case; open a
+flagged row to see which key the merge used.
+
+**Status: PASS.** 35 preset entries before, 35 after, `{new: 0, updated: 0,
+unchanged: 10}`.
+
 ---
 
 ## Check 2 — two libraries coexist, nothing archived, presets intact
