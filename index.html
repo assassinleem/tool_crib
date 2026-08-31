@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- tool_crib build: phase-2.5 (identity, .tools import, reconcile workbench) -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -648,6 +649,13 @@
 
   .sync-panel h3 { font-size: 14px; margin-bottom: 8px; }
 
+  .build-tag {
+    font-size: 11px;
+    color: var(--text-2);
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+  }
+
   .sync-panel .queue-list {
     max-height: 180px;
     overflow-y: auto;
@@ -776,6 +784,8 @@
   .change .title { overflow-wrap: anywhere; }
   .change .sub { font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
   .change .sub .was { text-decoration: line-through; }
+  /* A note is not a failure: the value is stored and exports untouched. */
+  .change .sub .note { color: var(--text-2); opacity: 0.85; }
   .change .sub .now { color: var(--text); }
   .change-more { padding: 8px 12px; font-size: 12px; color: var(--text-2); }
 
@@ -1119,6 +1129,7 @@
 </button>
 
 <div class="sync-panel" id="sync-panel">
+  <div class="build-tag" id="build-tag"></div>
   <h3>Your name</h3>
   <div class="panel-row">
     <input id="identity-input" list="people-list" autocomplete="off"
@@ -1244,6 +1255,12 @@ const BACKOFF_BASE_MS = 2000;
 const BACKOFF_CAP_MS  = 60000;
 
 /* In-memory store, rebuilt from the cache on every load. */
+/* Bumped whenever a phase lands. Shown in the sync panel and exposed as
+   window.TC_BUILD so a stale GitHub Pages deploy is one glance to spot
+   rather than a guess from behaviour. */
+const TC_BUILD = "phase-2.5";
+window.TC_BUILD = TC_BUILD;
+
 const LIB_FILE = "library.json";
 
 const store = {
@@ -1405,6 +1422,8 @@ function renderPeopleDatalist() {
 }
 
 function renderIdentity() {
+  const tag = document.getElementById("build-tag");
+  if (tag) tag.textContent = "build " + TC_BUILD;
   renderPeopleDatalist();
   const input = document.getElementById("identity-input");
   const hint = document.getElementById("identity-hint");
@@ -3358,20 +3377,26 @@ function deriveLib(rec) {
     for (const [a, b] of NUMERIC_PATHS) {
       const v = obj(raw[a])[b];
       if (v !== undefined && v !== null && v !== "" && !looksNumeric(v)) {
-        d.issues.push(`${a}.${b} is not a number (${shortVal(v)})`);
+        d.issues.push({ kind: "unparsed",
+                        text: `${a}.${b} is not a number (${shortVal(v)})` });
       }
     }
-    // Seen in the wild as the literal string "<NEW TOOL GUID>".
+    // Seen in the wild as the literal string "<NEW TOOL GUID>". Nothing is
+    // dropped — raw keeps it verbatim and it exports untouched — so this is
+    // a note about what the field holds, not a parse failure.
     if (typeof raw.reference_guid === "string" && /[<>]/.test(raw.reference_guid)) {
-      d.issues.push("reference_guid is a placeholder (" + shortVal(raw.reference_guid) + ")");
+      d.issues.push({ kind: "note",
+                      text: "reference_guid " + shortVal(raw.reference_guid) +
+                            " — placeholder, stored as-is" });
     }
     if (raw.last_modified !== undefined && raw.last_modified !== null &&
         !looksNumeric(raw.last_modified)) {
-      d.issues.push("last_modified is not a number");
+      d.issues.push({ kind: "unparsed", text: "last_modified is not a number" });
     }
   } catch (e) {
     // A derive that blows up must not cost the record: raw is already safe.
-    d.issues.push("could not be parsed for display (" + (e.message || e) + ")");
+    d.issues.push({ kind: "unparsed",
+                    text: "could not be parsed for display (" + (e.message || e) + ")" });
   }
   return d;
 }
@@ -3615,7 +3640,7 @@ function diffLibrary(parsed, libraryId) {
     seen.add(key);
 
     const derived = deriveLib(rec);
-    if (derived.issues.length) flagged++;
+    if (derived.issues.some(i => i.kind === "unparsed")) flagged++;
 
     const existing = store.library[key];
     const merge = mergePresets(existing && existing.presets, rawPresets(rec.raw),
@@ -3832,7 +3857,9 @@ function renderImportPreview() {
       parts.unshift(esc(row.note));
     }
     for (const issue of (row.derived.issues || [])) {
-      parts.push('<span class="was">imported, unparsed field — ' + esc(issue) + "</span>");
+      parts.push(issue.kind === "note"
+        ? '<span class="note">' + esc(issue.text) + "</span>"
+        : '<span class="was">imported, unparsed field — ' + esc(issue.text) + "</span>");
     }
     sub.innerHTML = parts.filter(Boolean).join(" · ");
     body.appendChild(sub);
