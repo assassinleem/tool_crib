@@ -1033,6 +1033,57 @@
   .change-list .change.clickable { cursor: pointer; }
   .change-list .change.clickable:hover { background: var(--surface-2); }
 
+  #reconcile-search input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 12px;
+    font: inherit;
+  }
+
+  .chip.clear { border-style: dashed; }
+
+  .change-list.tall { max-height: 62vh; }
+
+  .compile-table {
+    margin-top: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 12px;
+  }
+
+  .cmp-line {
+    display: flex;
+    gap: 10px;
+    padding: 5px 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .cmp-line:first-child { border-top: none; }
+  .cmp-line > div { flex: 1; min-width: 130px; overflow-wrap: anywhere; }
+  .cmp-line .cmp-field { flex: 0 0 150px; min-width: 150px; color: var(--text-2); }
+  .cmp-line.head { color: var(--text-2); font-weight: 600; }
+  .cmp-line.differs { background: var(--surface-2); }
+  .cmp-line.differs .cmp-field { color: var(--warn); }
+  .cmp-line.blocks { background: #3a1418; }
+  .cmp-line.blocks .cmp-field { color: var(--low); font-weight: 600; }
+
+  .stick-head {
+    margin-top: 10px;
+    padding: 4px 0;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .preset-row.inherited { background: #2a2118; }
+  .preset-row .pwarn { color: var(--warn); font-size: 11px; }
+
   /* ---- Conflict banner ---- */
 
   .conflict-banner {
@@ -1181,6 +1232,7 @@
     <section class="screen" id="screen-reconcile">
       <h1>Reconcile</h1>
       <div class="lib-summary" id="reconcile-head"></div>
+      <div class="crib-controls" id="reconcile-search"></div>
       <div class="chip-row" id="reconcile-tabs"></div>
       <div id="reconcile-body"></div>
     </section>
@@ -3889,6 +3941,29 @@ function mergePresets(existing, incoming, libraryId, now, by) {
   return { presets: out, added, changed, missing };
 }
 
+/* ---- Stickout ----------------------------------------------------------
+   The same endmill held at three reaches is three Fusion records and one
+   tool in the drawer. Stickout is what separates them, and it is the reason
+   two presets that look identical are not interchangeable: the same stepdown
+   at 4x reach is a broken tool. Fusion puts it in assemblyGaugeLength, or
+   LB on the geometry, depending on how the assembly was built. */
+function stickoutOf(rec) {
+  const raw = obj(rec && rec.raw);
+  const spots = [raw, obj(raw.geometry), obj(raw.holder), obj(raw["post-process"])];
+  for (const key of ["assemblyGaugeLength", "LB"]) {
+    for (const where of spots) {
+      const v = where[key];
+      if (looksNumeric(v)) return Number(v);
+    }
+  }
+  return null;
+}
+
+function stickoutLabel(v, unit) {
+  if (v === null || v === undefined) return "stickout not given";
+  return fmtDec(v) + (unitIsMm(unit) ? "mm" : '"');
+}
+
 /* Presets a crib item sees, collapsed by preset key across every linked
    library record. One guid arriving from six libraries is one row with six
    sources; two differently-named presets stay two rows. Where the same key
@@ -3897,6 +3972,8 @@ function mergePresets(existing, incoming, libraryId, now, by) {
 function aggregatePresets(records) {
   const rows = new Map();
   for (const rec of records) {
+    const stick = stickoutOf(rec);
+    const unit = deriveLib(rec).unit;
     for (const e of (Array.isArray(rec.presets) ? rec.presets : [])) {
       let row = rows.get(e.key);
       if (!row) {
@@ -3904,15 +3981,64 @@ function aggregatePresets(records) {
         rows.set(e.key, row);
       }
       const lib = rec.library_id || "?";
-      row.sources.push({ library: lib, last_seen: (e.last_seen || {}).date || null });
-      const sig = stableStringify(e.raw);
+      row.sources.push({ library: lib, last_seen: (e.last_seen || {}).date || null,
+                         stickout: stick });
+      const sig = stableStringify(e.raw) + "|" + stick;
       const variant = row.variants.find(v => v.sig === sig);
-      if (variant) variant.libraries.push(lib);
-      else row.variants.push({ sig, raw: e.raw, libraries: [lib] });
+      if (variant) { if (!variant.libraries.includes(lib)) variant.libraries.push(lib); }
+      else row.variants.push({ sig, raw: e.raw, libraries: [lib], stickout: stick,
+                               unit, key: e.key, name: row.name });
     }
   }
-  for (const row of rows.values()) row.conflict = row.variants.length > 1;
+  for (const row of rows.values()) {
+    // Two variants that differ only in stickout are not a conflict — they are
+    // the point. A conflict is the same preset at the same reach disagreeing.
+    const bySameStick = new Map();
+    for (const v of row.variants) {
+      const k = String(v.stickout);
+      bySameStick.set(k, (bySameStick.get(k) || 0) + 1);
+    }
+    row.conflict = [...bySameStick.values()].some(n => n > 1);
+  }
   return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function cutDepthSig(raw) {
+  const p = obj(raw);
+  return stableStringify([p.stepdown ?? null, p.stepover ?? null]);
+}
+
+/* Every preset variant across the linked records, grouped by stickout —
+   longest reach first, because that is the one that breaks tools.
+
+   A variant is flagged when the identical stepdown/stepover shows up at a
+   SHORTER stickout too: the numbers were carried over to the longer reach
+   rather than re-cut for it, which is exactly the thing worth a comment. */
+function presetsByStickout(records) {
+  const rows = aggregatePresets(records);
+  const variants = [];
+  for (const row of rows) {
+    for (const v of row.variants) variants.push({ ...v, conflict: row.conflict });
+  }
+  for (const v of variants) {
+    const sig = cutDepthSig(v.raw);
+    if (sig === stableStringify([null, null])) continue;
+    v.inheritedFrom = variants.find(o =>
+      o !== v && o.key === v.key && cutDepthSig(o.raw) === sig &&
+      typeof o.stickout === "number" && typeof v.stickout === "number" &&
+      o.stickout < v.stickout) || null;
+  }
+  const groups = new Map();
+  for (const v of variants) {
+    const k = v.stickout === null || v.stickout === undefined ? "" : String(v.stickout);
+    if (!groups.has(k)) groups.set(k, { stickout: v.stickout ?? null, unit: v.unit, variants: [] });
+    groups.get(k).variants.push(v);
+  }
+  return [...groups.values()].sort((a, b) => {
+    if (a.stickout === null) return 1;
+    if (b.stickout === null) return -1;
+    return b.stickout - a.stickout;
+  });
 }
 
 /* ---- Diff against what is already in library.json ---- */
@@ -4644,6 +4770,7 @@ function groupSignature(rec, d, best) {
 function buildReconcileQueue() {
   const groups = new Map();
   for (const rec of unlinkedRecords()) {
+    if (!libMatches(rec)) continue;
     const d = deriveLib(rec);
     const cands = candidatesFor(rec);
     const best = cands.length ? cands[0] : null;
@@ -4845,9 +4972,16 @@ function markNoFusionEquivalent(item) {
 
 /* Seeded from the library record, linked on creation. Quantity is left
    empty on purpose — a guessed count is worse than no count. */
-function createItemFromLibrary(records) {
+function createItemFromLibrary(records, opts) {
   if (!requireIdentity()) return false;
-  const rec = records[0];
+  opts = opts || {};
+  // Seed from the longest stickout when compiling: its geometry is the one
+  // that describes the assembly people will ask about, and it is the
+  // conservative choice for anything copied onto the crib record.
+  const ordered = opts.compiled
+    ? [...records].sort((a, b) => (stickoutOf(b) ?? -1) - (stickoutOf(a) ?? -1))
+    : records;
+  const rec = ordered[0];
   const d = deriveLib(rec);
   const famKey = famKeyForLib(d);
   const fam = CATEGORIES.families.find(f => f.key === famKey && f.enabled);
@@ -4882,19 +5016,201 @@ function createItemFromLibrary(records) {
     consumable: fam.consumable_default !== false,
     archived: false,
     created_from_library: rec.key,
+    compiled_from: opts.compiled ? ordered.map(r => r.key) : null,
+    compiled_override: opts.compiled && opts.override ? true : null,
+    compiled_by: opts.compiled ? by : null,
     updated_at: now, updated_by: by
   };
   if (!writeItem(item,
-    "add " + id + " " + item.description + " (from " + (rec.library_id || "library") + ")")) {
+    "add " + id + " " + item.description +
+    (opts.compiled ? " (compiled from " + records.length + " library records)"
+                   : " (from " + (rec.library_id || "library") + ")"))) {
     return false;
   }
-  return writeLink(records, item, null);
+  return writeLink(ordered, item, null);
+}
+
+
+/* ---- Compile group -----------------------------------------------------
+   One physical endmill held at three stickouts is three Fusion records and
+   one tool in the drawer. Compiling collapses them onto a single crib item,
+   with every record linked so the presets aggregate per the many-to-one rule.
+
+   What must NOT be collapsed: a different flute count, diameter or corner
+   radius is a different cutter, not the same cutter at a different reach.
+   Those block, and only an explicit override gets past them. Reach-related
+   differences -- gauge length, LB, OAL, holder, the post's T number -- are
+   the expected ones and never block. */
+
+const COMPILE_BLOCKING = [
+  ["NOF", "flute count", d => obj(d.geometry).NOF],
+  ["DC", "diameter", d => obj(d.geometry).DC],
+  ["SFDM", "shank diameter", d => obj(d.geometry).SFDM],
+  ["RE", "corner radius", d => obj(d.geometry).RE]
+];
+
+const COMPILE_EXPECTED = [
+  ["stickout", "stickout (gauge length / LB)", (d, rec) => stickoutOf(rec)],
+  ["OAL", "OAL", d => obj(d.geometry).OAL],
+  ["LCF", "flute length", d => obj(d.geometry).LCF],
+  ["holder", "holder", d => d.holder],
+  ["post", "post T number", d => d.post_number],
+  ["library", "library", (d, rec) => rec.library_id],
+  ["description", "description", d => d.description],
+  ["product_id", "product id", d => d.product_id]
+];
+
+function compileRows(records) {
+  const derived = records.map(deriveLib);
+  const build = (spec, blocking) => spec.map(([key, label, get]) => {
+    const values = records.map((rec, i) => get(derived[i], rec));
+    const sigs = values.map(v => stableStringify(v ?? null));
+    return { key, label, values, blocking,
+             differs: new Set(sigs).size > 1 };
+  });
+  return { blocking: build(COMPILE_BLOCKING, true),
+           expected: build(COMPILE_EXPECTED, false) };
+}
+
+function openCompile(records) {
+  if (records.length < 2) {
+    alertReconcile("Select at least two library records to compile into one crib item.");
+    return;
+  }
+  reconState.compile = { records, rows: compileRows(records), override: false };
+  renderReconcile();
+}
+
+function renderCompilePanel(host) {
+  const c = reconState.compile;
+  const { records, rows } = c;
+  const blockers = rows.blocking.filter(r => r.differs);
+
+  const card = el("div", "recon-card");
+  card.appendChild(el("div", "recon-title",
+    "Compile " + records.length + " library records into one crib item"));
+  card.appendChild(el("div", "recon-sub",
+    "One tool in the drawer, " + records.length + " programmed assemblies. Every " +
+    "selected record links to the new item and their presets aggregate onto it."));
+
+  const table = el("div", "compile-table");
+  const head = el("div", "cmp-line head");
+  head.appendChild(el("div", "cmp-field", ""));
+  for (const rec of records) {
+    head.appendChild(el("div", null, rec.library_id + " · " + libDesc(rec)));
+  }
+  table.appendChild(head);
+  const addRows = list => {
+    for (const r of list) {
+      const line = el("div", "cmp-line" +
+        (r.differs ? (r.blocking ? " blocks" : " differs") : ""));
+      const f = el("div", "cmp-field", r.label);
+      line.appendChild(f);
+      for (const v of r.values) line.appendChild(el("div", null, shortVal(v)));
+      table.appendChild(line);
+    }
+  };
+  addRows(rows.blocking);
+  addRows(rows.expected);
+  card.appendChild(table);
+
+  if (blockers.length) {
+    const warn = el("div", "recon-note blocked");
+    warn.appendChild(el("div", null,
+      "These records disagree on " +
+      blockers.map(b => b.label).join(", ") +
+      ". That is a different cutter, not the same cutter at a different reach — " +
+      "compiling them would put two tools on one crib record and one of them " +
+      "would get the other's speeds and feeds."));
+    const lbl = document.createElement("label");
+    lbl.className = "check-field";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = c.override;
+    cb.addEventListener("change", () => { c.override = cb.checked; renderReconcile(); });
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(
+      " I have checked these in person and they are the same physical tool"));
+    warn.appendChild(lbl);
+    card.appendChild(warn);
+  } else {
+    card.appendChild(el("div", "recon-sub",
+      "Nothing that identifies the cutter differs — only reach and assembly."));
+  }
+
+  const acts = el("div", "recon-actions");
+  const ok = el("button", "btn-small",
+    "Create one item from " + records.length + " records");
+  ok.type = "button";
+  ok.disabled = blockers.length > 0 && !c.override;
+  if (ok.disabled) ok.style.opacity = "0.5";
+  ok.addEventListener("click", () => {
+    if (createItemFromLibrary(records, { compiled: true, override: blockers.length > 0 })) {
+      reconState.compile = null;
+      reconState.bulk.clear();
+      renderReconcile();
+    }
+  });
+  const cancel = el("button", "btn-ghost", "Cancel");
+  cancel.type = "button";
+  cancel.addEventListener("click", () => { reconState.compile = null; renderReconcile(); });
+  acts.appendChild(ok);
+  acts.appendChild(cancel);
+  card.appendChild(acts);
+  host.appendChild(card);
+}
+
+/* The simple sibling: one crib item per selected record, no collapsing. */
+function bulkCreateItems(groups) {
+  if (!requireIdentity()) return false;
+  let made = 0;
+  for (const g of groups) {
+    if (createItemFromLibrary(g.records)) made++;
+  }
+  alertReconcile(made
+    ? made + " crib item" + (made === 1 ? "" : "s") + " created and linked."
+    : "Nothing was created.");
+  return made > 0;
 }
 
 /* ---- Screen ------------------------------------------------------------ */
 
+/* Search reaches every library record, whatever state it is in — a linked or
+   dismissed tool has to be findable and inspectable, and in a 281-record
+   store scrolling the queue is not a way to find anything. */
+const reconFilter = { q: "", library: null, state: null, type: null };
+
+function libHaystack(rec) {
+  const d = deriveLib(rec);
+  return [d.description, d.product_id, d.vendor, d.type, rec.library_id,
+          rec.guid, rec.crib_item_id].filter(Boolean).join(" ").toLowerCase();
+}
+
+function libMatches(rec) {
+  if (reconFilter.library && rec.library_id !== reconFilter.library) return false;
+  if (reconFilter.state && linkState(rec) !== reconFilter.state) return false;
+  if (reconFilter.type && deriveLib(rec).type !== reconFilter.type) return false;
+  const q = reconFilter.q.trim().toLowerCase();
+  if (q && !libHaystack(rec).includes(q)) return false;
+  return true;
+}
+
+function reconFilterActive() {
+  return !!(reconFilter.q.trim() || reconFilter.library ||
+            reconFilter.state || reconFilter.type);
+}
+
+function libTypes() {
+  const out = new Set();
+  for (const rec of libRecords()) {
+    const t = deriveLib(rec).type;
+    if (t) out.add(t);
+  }
+  return [...out].sort();
+}
+
 const reconState = { tab: "queue", groups: [], bulk: new Set(),
-                     confirm: null, picker: null, note: "",
+                     confirm: null, picker: null, compile: null, note: "",
                      // Kept across rebuilds: the queue is recomputed on every
                      // render, and a selection or a skip that evaporated on
                      // the next paint would be unusable.
@@ -4933,9 +5249,13 @@ function renderReconcile() {
   head.textContent = `${unlinked} library tool${unlinked === 1 ? "" : "s"} to review · ` +
     `${orphans} crib item${orphans === 1 ? "" : "s"} with no library match`;
 
+  renderReconcileSearch();
+  const matching = libRecords().filter(libMatches).length;
+
   const tabs = document.getElementById("reconcile-tabs");
   tabs.textContent = "";
   for (const [key, label] of [["queue", "Queue (" + reconState.groups.length + ")"],
+                              ["all", "All records (" + matching + ")"],
                               ["reverse", "Crib items (" + orphans + ")"],
                               ["stale", "Stale (" + libRecords().filter(r => r.stale_in_library).length + ")"]]) {
     const b = el("button", "chip" + (reconState.tab === key ? " on" : ""), label);
@@ -4953,18 +5273,129 @@ function renderReconcile() {
     n.appendChild(x);
     host.appendChild(n);
   }
+  if (reconState.compile) { renderCompilePanel(host); return; }
   if (reconState.confirm) { renderConfirmPanel(host); return; }
   if (reconState.picker) { renderPicker(host); return; }
   if (reconState.tab === "queue") renderQueueTab(host);
+  else if (reconState.tab === "all") renderAllTab(host);
   else if (reconState.tab === "reverse") renderReverseTab(host);
   else renderStaleTab(host);
+}
+
+/* The search box keeps focus and caret across re-renders; rebuilding it under
+   a typing operator is how a search box gets abandoned. */
+function renderReconcileSearch() {
+  const host = document.getElementById("reconcile-search");
+  let input = document.getElementById("recon-q");
+  if (!input) {
+    host.textContent = "";
+    input = document.createElement("input");
+    input.id = "recon-q";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.placeholder = "Search every library record — description, product id, vendor, type, library…";
+    input.addEventListener("input", () => {
+      reconFilter.q = input.value;
+      renderReconcile();
+    });
+    host.appendChild(input);
+    const chips = document.createElement("div");
+    chips.className = "chip-row";
+    chips.id = "recon-chips";
+    host.appendChild(chips);
+  }
+  if (input.value !== reconFilter.q) input.value = reconFilter.q;
+
+  const chips = document.getElementById("recon-chips");
+  chips.textContent = "";
+  const mk = (label, on, toggle) => {
+    const b = el("button", "chip" + (on ? " on" : ""), label);
+    b.type = "button";
+    b.addEventListener("click", () => { toggle(); renderReconcile(); });
+    chips.appendChild(b);
+  };
+  for (const id of libraryIds()) {
+    mk(id, reconFilter.library === id,
+       () => { reconFilter.library = reconFilter.library === id ? null : id; });
+  }
+  for (const [key, label] of [[LINK_UNLINKED, "unlinked"], [LINK_LINKED, "linked"],
+                              [LINK_NONE, "not stocked"]]) {
+    mk(label, reconFilter.state === key,
+       () => { reconFilter.state = reconFilter.state === key ? null : key; });
+  }
+  for (const t of libTypes()) {
+    mk(t, reconFilter.type === t,
+       () => { reconFilter.type = reconFilter.type === t ? null : t; });
+  }
+  if (reconFilterActive()) {
+    const clear = el("button", "chip clear", "clear");
+    clear.type = "button";
+    clear.addEventListener("click", () => {
+      reconFilter.q = ""; reconFilter.library = null;
+      reconFilter.state = null; reconFilter.type = null;
+      const i = document.getElementById("recon-q");
+      if (i) i.value = "";
+      renderReconcile();
+    });
+    chips.appendChild(clear);
+  }
+}
+
+const ALL_CAP = 300;
+
+/* Every library record the filter matches, whatever its state. A row opens
+   the inspector — read-only, which is the point: this is for finding and
+   looking, not for deciding. */
+function renderAllTab(host) {
+  const rows = libRecords().filter(libMatches)
+    .sort((a, b) => libDesc(a).localeCompare(libDesc(b)) ||
+                    String(a.library_id).localeCompare(String(b.library_id)));
+  if (!rows.length) {
+    host.appendChild(el("div", "empty-state", libRecords().length
+      ? "Nothing matches that search."
+      : "Import a Fusion library first."));
+    return;
+  }
+  const list = el("div", "change-list tall");
+  for (const rec of rows.slice(0, ALL_CAP)) {
+    const d = deriveLib(rec);
+    const r = el("div", "change clickable");
+    const state = linkState(rec);
+    r.appendChild(el("div", "tag " + (state === LINK_LINKED ? "upd"
+      : state === LINK_NONE ? "skip" : "new"),
+      state === LINK_LINKED ? "linked" : state === LINK_NONE ? "not stocked" : "unlinked"));
+    const b = el("div", "body");
+    b.appendChild(el("div", "title", libDesc(rec)));
+    const stick = stickoutOf(rec);
+    b.appendChild(el("div", "sub", [
+      rec.library_id, libLine(d),
+      stick !== null ? "stickout " + stickoutLabel(stick, d.unit) : "",
+      rec.crib_item_id ? "→ " + rec.crib_item_id : "",
+      rec.stale_in_library ? "stale" : ""
+    ].filter(Boolean).join(" · ")));
+    r.appendChild(b);
+    r.addEventListener("click", () => openLibInspector(rec, null, rec.library_id));
+    list.appendChild(r);
+  }
+  if (rows.length > ALL_CAP) {
+    list.appendChild(el("div", "change-more",
+      `+ ${rows.length - ALL_CAP} more — narrow the search to see them.`));
+  }
+  host.appendChild(list);
+}
+
+function selectedRecords() {
+  const out = [];
+  for (const g of reconState.groups) if (reconState.bulk.has(g.sig)) out.push(...g.records);
+  return out;
 }
 
 function renderQueueTab(host) {
   if (!reconState.groups.length) {
     host.appendChild(el("div", "empty-state",
-      libRecords().length ? "Nothing left to review — every library record has an answer."
-                          : "Import a Fusion library first."));
+      reconFilterActive() ? "No unreviewed records match that search — try All records."
+      : libRecords().length ? "Nothing left to review — every library record has an answer."
+                            : "Import a Fusion library first."));
     return;
   }
   if (reconState.bulk.size) {
@@ -4973,17 +5404,25 @@ function renderQueueTab(host) {
     const notStocked = el("button", "btn-ghost", "Not stocked");
     notStocked.type = "button";
     notStocked.addEventListener("click", () => {
-      const recs = [];
-      for (const g of reconState.groups) if (reconState.bulk.has(g.sig)) recs.push(...g.records);
-      if (markNotStocked(recs)) { reconState.bulk.clear(); renderReconcile(); }
+      if (markNotStocked(selectedRecords())) { reconState.bulk.clear(); renderReconcile(); }
     });
-    const linkAll = el("button", "btn-small", "Link all to one crib item…");
+    const compile = el("button", "btn-small",
+      "Create one item from " + selectedRecords().length + " records");
+    compile.type = "button";
+    compile.addEventListener("click", () => openCompile(selectedRecords()));
+    bar.appendChild(compile);
+    const bulkNew = el("button", "btn-ghost",
+      "Create " + reconState.bulk.size + " separate items");
+    bulkNew.type = "button";
+    bulkNew.addEventListener("click", () => {
+      const groups = reconState.groups.filter(g => reconState.bulk.has(g.sig));
+      if (bulkCreateItems(groups)) reconState.bulk.clear();
+      renderReconcile();
+    });
+    bar.appendChild(bulkNew);
+    const linkAll = el("button", "btn-ghost", "Link all to one crib item…");
     linkAll.type = "button";
-    linkAll.addEventListener("click", () => {
-      const recs = [];
-      for (const g of reconState.groups) if (reconState.bulk.has(g.sig)) recs.push(...g.records);
-      openPicker(recs);
-    });
+    linkAll.addEventListener("click", () => openPicker(selectedRecords()));
     const clear = el("button", "btn-ghost", "Clear");
     clear.type = "button";
     clear.addEventListener("click", () => { reconState.bulk.clear(); renderReconcile(); });
@@ -5337,22 +5776,31 @@ function renderFusionSection(item) {
   // Collapsed by preset key, not by name: the same guid arriving from six
   // libraries is one row with six sources, and two differently-named presets
   // stay two rows. Otherwise this is sixty lines nobody reads.
-  const rows = aggregatePresets(recs);
-  if (!rows.length) return;
+  // Grouped by stickout, longest reach first. Presets from different
+  // stickouts are never interchangeable and must never read as though they
+  // are — the same stepdown at 4x reach is a broken tool.
+  const groups = presetsByStickout(recs);
+  const presetCount = groups.reduce((n, g) => n + g.variants.length, 0);
+  if (!presetCount) return;
   const pt = document.createElement("div");
   pt.className = "drawer-section-title";
-  pt.textContent = "Speeds & feeds (" + rows.length + ")";
+  pt.textContent = "Speeds & feeds (" + presetCount + ")";
   drawerEl.appendChild(pt);
   const plist = document.createElement("div");
   plist.className = "fusion-list";
-  for (const row of rows) {
-    for (const v of row.variants) {
+  for (const g of groups) {
+    const gh = document.createElement("div");
+    gh.className = "stick-head";
+    gh.textContent = "stickout " + stickoutLabel(g.stickout, g.unit);
+    plist.appendChild(gh);
+    for (const v of g.variants) {
       const p = obj(v.raw);
       const line = document.createElement("div");
-      line.className = "preset-row" + (row.conflict ? " conflict" : "");
+      line.className = "preset-row" + (v.conflict ? " conflict" : "") +
+        (v.inheritedFrom ? " inherited" : "");
       const nm = document.createElement("span");
       nm.className = "pname";
-      nm.textContent = row.name + (row.conflict ? " ⚠" : "");
+      nm.textContent = v.name + (v.conflict ? " ⚠" : "");
       line.appendChild(nm);
       const bits = [];
       if (p.v_c != null) bits.push("vc " + shortVal(p.v_c));
@@ -5366,10 +5814,17 @@ function renderFusionSection(item) {
       if (isPlainObject(p.material) && p.material.name) bits.push(String(p.material.name));
       else if (typeof p.material === "string") bits.push(p.material);
       line.appendChild(document.createTextNode(bits.join(" · ")));
+      if (v.inheritedFrom) {
+        const w = document.createElement("span");
+        w.className = "pwarn";
+        w.textContent = "ap/ae same as at " +
+          stickoutLabel(v.inheritedFrom.stickout, v.inheritedFrom.unit) +
+          " — not re-cut for this reach";
+        line.appendChild(w);
+      }
       const src = document.createElement("span");
       src.className = "psrc";
-      const last = row.sources.map(x => x.last_seen).filter(Boolean).sort().pop();
-      src.textContent = v.libraries.join(", ") + (last ? " · seen " + last.slice(0, 10) : "");
+      src.textContent = v.libraries.join(", ");
       line.appendChild(src);
       plist.appendChild(line);
     }
