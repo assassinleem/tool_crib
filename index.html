@@ -1084,6 +1084,49 @@
   .preset-row.inherited { background: #2a2118; }
   .preset-row .pwarn { color: var(--warn); font-size: 11px; }
 
+  .sel-col { width: 26px; }
+
+  .export-opts { margin-top: 12px; }
+  .export-opts .panel-hint { margin: 2px 0 10px 22px; max-width: 62ch; }
+
+  .conflict-card { border-color: var(--warn); }
+
+  .conflict-row {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .conflict-row:last-child { border-bottom: none; }
+  .conflict-row.settled { opacity: 0.72; }
+
+  .conflict-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .conflict-field { font-family: ui-monospace, monospace; font-size: 13px; }
+  .conflict-tool { color: var(--text-2); font-size: 12px; }
+
+  .sev-tag {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+
+  .sev-tag.high { color: var(--low); border-color: var(--low); }
+  .sev-tag.medium { color: var(--warn); border-color: var(--warn); }
+  .sev-tag.low { color: var(--text-2); }
+
+  .conflict-sides {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .rt-pass { color: var(--ok); font-weight: 600; }
+  .rt-fail { color: var(--low); font-weight: 600; }
+
   /* ---- Conflict banner ---- */
 
   .conflict-banner {
@@ -1184,6 +1227,7 @@
       <button class="nav-btn" data-screen="add">Add Tools</button>
       <button class="nav-btn" data-screen="import">Import Library</button>
       <button class="nav-btn" data-screen="reconcile">Reconcile</button>
+      <button class="nav-btn" data-screen="export">Export</button>
       <button class="nav-btn" data-screen="tagout">Tag-Out</button>
       <button class="nav-btn" data-screen="ordering">Needs Ordering</button>
       <button class="nav-btn" data-screen="log">Log</button>
@@ -1201,7 +1245,7 @@
       <div class="empty-state" id="crib-empty">No items yet.</div>
       <table class="crib-table" id="crib-table" hidden>
         <thead><tr>
-          <th>ID</th><th></th><th>Description</th>
+          <th class="sel-col"></th><th>ID</th><th></th><th>Description</th>
           <th class="num">Avail / On&nbsp;hand</th><th>Family</th><th></th>
         </tr></thead>
         <tbody id="crib-tbody"></tbody>
@@ -1235,6 +1279,13 @@
       <div class="crib-controls" id="reconcile-search"></div>
       <div class="chip-row" id="reconcile-tabs"></div>
       <div id="reconcile-body"></div>
+    </section>
+
+    <section class="screen" id="screen-export">
+      <h1>Export</h1>
+      <div class="lib-summary">Produces a .tools file Fusion will read. Always a
+      new, timestamped file — the originals are never touched.</div>
+      <div id="export-body"></div>
     </section>
 
     <section class="screen" id="screen-tagout">
@@ -1326,11 +1377,14 @@
 <script>
 "use strict";
 
-const SCREENS = ["crib", "add", "import", "reconcile", "tagout", "ordering", "log"];
+const SCREENS = ["crib", "add", "import", "reconcile", "export",
+                 "tagout", "ordering", "log"];
 const DEFAULT_SCREEN = "crib";
 
 function showScreen(name) {
   if (!SCREENS.includes(name)) name = DEFAULT_SCREEN;
+  if (name === "export" && typeof renderExport === "function") setTimeout(renderExport, 0);
+  if (name === "reconcile" && typeof renderReconcile === "function") setTimeout(renderReconcile, 0);
   for (const s of SCREENS) {
     document.getElementById("screen-" + s)
       .classList.toggle("active", s === name);
@@ -1432,7 +1486,8 @@ function keysForLibrary(libraryId) {
 
 const store = {
   items: {}, tagouts: {}, logEvents: {}, people: [],
-  library: {},   // Fusion library, keyed by guid (LIB_FILE)
+  library: {},   // Fusion library, keyed by library_id::guid
+  exportLog: {}, // exports/<month>/<name>.json manifests
   loaded: false
 };
 
@@ -1712,7 +1767,7 @@ async function loadData() {
 
 function ingest(cache) {
   store.items = {}; store.tagouts = {}; store.logEvents = {}; store.people = [];
-  store.library = {};
+  store.library = {}; store.exportLog = {};
   const libraryFiles = {};
   let legacyLibraryData = null;
   for (const [path, file] of Object.entries(cache.files)) {
@@ -1720,6 +1775,7 @@ function ingest(cache) {
     try { data = JSON.parse(file.text); } catch { continue; }
     if (path === LIB_FILE)                 legacyLibraryData = data;
     else if (path.startsWith(LIB_DIR))     libraryFiles[path] = data;
+    else if (path.startsWith("exports/"))  store.exportLog[path] = data;
     else if (path === "people.json")       store.people = data;
     else if (path.startsWith("items/"))    store.items[data.id] = data;
     else if (path.startsWith("tagouts/"))  store.tagouts[data.id] = data;
@@ -1787,6 +1843,7 @@ function buildOpBody(op) {
   if (op.kind === "item")    return jsonFile(store.items[op.target]);
   if (op.kind === "log")     return jsonFile(store.logEvents[op.path]);
   if (op.kind === "legacy-blank") return "{}\n";
+  if (op.kind === "export-log") return jsonFile(store.exportLog[op.path]);
   return null;
 }
 
@@ -2997,6 +3054,22 @@ function renderCrib() {
     tr.className = (isLow(item) ? "low " : "") + (item.archived ? "archived" : "");
     tr.dataset.id = item.id;
 
+    // Selection feeds the Export screen's "Crib selection" scope.
+    const tdSel = document.createElement("td");
+    tdSel.className = "sel-col";
+    if (recordsForItem(item.id).length) {
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = cribSelection.has(item.id);
+      cb.title = "Include in the Export screen's crib selection";
+      cb.addEventListener("click", e => e.stopPropagation());
+      cb.addEventListener("change", () => {
+        if (cb.checked) cribSelection.add(item.id); else cribSelection.delete(item.id);
+      });
+      tdSel.appendChild(cb);
+    }
+    tr.appendChild(tdSel);
+
     const tdId = document.createElement("td");
     tdId.className = "id-cell";
     tdId.textContent = item.id;
@@ -3380,6 +3453,16 @@ function renderDrawer() {
   arch.addEventListener("click", () => setArchived(item.id, !item.archived));
   actions.appendChild(arch);
 
+  if (recordsForItem(item.id).length) {
+    const ex = document.createElement("button");
+    ex.type = "button";
+    ex.className = "btn-ghost";
+    ex.textContent = "Export for Fusion";
+    ex.title = "One .tools file for this tool, guids preserved";
+    ex.addEventListener("click", () => exportCribItem(item));
+    actions.appendChild(ex);
+  }
+
   if (item.order_url) {
     const ord = document.createElement("button");
     ord.type = "button";
@@ -3625,7 +3708,7 @@ const NUMERIC_PATHS = [
 function deriveLib(rec) {
   // Records written before raw-verbatim storage still render: fall back to
   // reading the record itself. Re-importing the source file migrates them.
-  const raw = rec && isPlainObject(rec.raw) ? rec.raw : obj(rec);
+  const raw = rec && isPlainObject(rec.raw) ? resolvedRaw(rec) : obj(rec);
   const legacy = !(rec && isPlainObject(rec.raw));
   const d = { raw, legacy, issues: [] };
   try {
@@ -3699,12 +3782,24 @@ function deriveLib(rec) {
    and rec.presets holds the union kept across every import. Handing Fusion
    back the union is the entire point of merging them. */
 function rawForExport(rec) {
-  const raw = rec && isPlainObject(rec.raw) ? rec.raw : obj(rec);
-  const out = {};
-  for (const k of Object.keys(raw)) if (!k.startsWith("_")) out[k] = raw[k];
+  const raw = rec && isPlainObject(rec.raw) ? resolvedRaw(rec) : obj(rec);
+  const out = stripAppKeys(raw);
   const presets = Array.isArray(rec && rec.presets) ? rec.presets : null;
   if (presets && isPlainObject(out["start-values"])) {
-    out["start-values"] = { ...out["start-values"], presets: presets.map(p => p.raw) };
+    out["start-values"] = { ...out["start-values"],
+      presets: presets.map(p => stripAppKeys(resolvedPresetRaw(rec, p))) };
+  }
+  return out;
+}
+
+/* Nothing beginning with _ may reach Fusion, at any depth. */
+function stripAppKeys(v) {
+  if (Array.isArray(v)) return v.map(stripAppKeys);
+  if (!isPlainObject(v)) return v;
+  const out = {};
+  for (const k of Object.keys(v)) {
+    if (k.startsWith("_")) continue;
+    out[k] = stripAppKeys(v[k]);
   }
   return out;
 }
@@ -4041,6 +4136,218 @@ function presetsByStickout(records) {
   });
 }
 
+
+/* ================= Cross-library conflicts (Part B) =====================
+   The same guid in two libraries is normal — that is how Fusion copies a
+   tool. What is not normal is the two copies disagreeing about the cutter.
+   In two real files sharing 113 guids: 4 geometry conflicts (a .25" ball
+   carrying NOF 4 in one and NOF 1 in the other), 2 holder, 1 post-process,
+   16 tools with different preset sets, 10 shared preset guids with different
+   values. A wrong flute count silently changes every feed derived from it.
+
+   Float noise is not a conflict. 3.649606299212598 and 3.64961 are the same
+   number written twice; comparing them exactly buries the four real ones in
+   a hundred fake ones. ---------------------------------------------------- */
+
+function deepCopy(v) { try { return JSON.parse(JSON.stringify(v)); } catch { return v; } }
+
+/* Relative, not absolute. The documented case — 3.649606299212598 written
+   back as 3.64961 — differs by 1.014e-6, so a strict 1e-6 would flag the very
+   example that must pass. 1e-5 covers a value re-written to six significant
+   figures and is still three orders of magnitude tighter than any real
+   disagreement (NOF 4 vs 3 is 25%, v_c 400 vs 520 is 30%). */
+const NUM_TOL = 1e-5;
+
+function numEq(a, b) {
+  if (a === b) return true;
+  if (!isFinite(a) || !isFinite(b)) return false;
+  const scale = Math.max(Math.abs(a), Math.abs(b));
+  if (scale === 0) return true;
+  return Math.abs(a - b) / scale <= NUM_TOL;
+}
+
+/* Same value, allowing for how many decimals somebody's exporter kept. */
+function valueEq(a, b) {
+  if (looksNumeric(a) && looksNumeric(b)) return numEq(Number(a), Number(b));
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const k of keys) if (!valueEq(a[k], b[k])) return false;
+    return true;
+  }
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((v, i) => valueEq(v, b[i]));
+  }
+  return stableStringify(a ?? null) === stableStringify(b ?? null);
+}
+
+const SEV_HIGH = "high", SEV_MED = "medium", SEV_LOW = "low";
+const SEV_ORDER = { high: 0, medium: 1, low: 2 };
+
+/* Anything that changes a cut is high. Reach and simulation are medium.
+   Labels are low. */
+const HIGH_FIELDS = new Set(["NOF", "DC", "SFDM", "RE", "LCF", "SC", "INSD"]);
+const MED_FIELDS = new Set(["assemblyGaugeLength", "LB", "OAL"]);
+const LOW_FIELDS = new Set(["description", "vendor", "product-id", "product-link",
+  "number", "GRADE", "last_modified", "reference_guid", "BMC", "unit"]);
+const HIGH_PRESET_FIELDS = new Set(["v_c", "f_z", "f_n"]);
+
+function severityOf(path) {
+  const last = path.split(".").pop();
+  if (path.startsWith("geometry.") && HIGH_FIELDS.has(last)) return SEV_HIGH;
+  if (MED_FIELDS.has(last)) return SEV_MED;
+  if (path.startsWith("holder") || path.startsWith("shaft")) return SEV_MED;
+  if (LOW_FIELDS.has(last)) return SEV_LOW;
+  if (path.startsWith("post-process")) return SEV_LOW;
+  return SEV_LOW;
+}
+
+function categoryOf(path) {
+  if (path.startsWith("geometry")) return "geometry";
+  if (path.startsWith("holder") || path.startsWith("shaft")) return "holder";
+  if (path.startsWith("post-process")) return "post-process";
+  return "record";
+}
+
+const CONFLICT_SKIP = new Set(["start-values", "guid"]);
+
+/* Differing leaf paths between two raw records, numeric noise excluded. */
+function conflictPaths(a, b, prefix, out) {
+  out = out || [];
+  prefix = prefix || "";
+  const keys = new Set([...Object.keys(obj(a)), ...Object.keys(obj(b))]);
+  for (const k of [...keys].sort()) {
+    if (!prefix && CONFLICT_SKIP.has(k)) continue;
+    if (k.startsWith("_")) continue;
+    const path = prefix ? prefix + "." + k : k;
+    const va = obj(a)[k], vb = obj(b)[k];
+    if (isPlainObject(va) && isPlainObject(vb)) { conflictPaths(va, vb, path, out); continue; }
+    if (!valueEq(va, vb)) out.push({ path, stored: va, incoming: vb });
+  }
+  return out;
+}
+
+function presetByGuid(rec) {
+  const map = new Map();
+  for (const e of (Array.isArray(rec.presets) ? rec.presets : [])) {
+    if (e.guid) map.set(e.guid, e);
+  }
+  return map;
+}
+
+/* One incoming record against one stored record carrying the same guid in a
+   different library. */
+function compareRecords(stored, incoming, incomingLibraryId) {
+  const out = [];
+  const storedRaw = resolvedRaw(stored);
+  const incomingRaw = obj(incoming.raw);
+
+  for (const d of conflictPaths(storedRaw, incomingRaw)) {
+    out.push({
+      id: stored.key + "|" + d.path,
+      kind: "field", path: d.path, field: d.path,
+      category: categoryOf(d.path), severity: severityOf(d.path),
+      stored: d.stored, incoming: d.incoming,
+      storedKey: stored.key, storedLibrary: stored.library_id,
+      incomingLibrary: incomingLibraryId, guid: incoming.guid
+    });
+  }
+
+  // Preset SETS merge by guid and never conflict — that is Phase 2.5. Only a
+  // shared preset guid whose values disagree surfaces here.
+  const mine = presetByGuid(stored);
+  for (const pr of rawPresets(incoming.raw)) {
+    const g = typeof obj(pr).guid === "string" ? pr.guid : null;
+    if (!g || !mine.has(g)) continue;
+    const theirs = obj(mine.get(g).raw);
+    for (const d of conflictPaths(theirs, obj(pr))) {
+      out.push({
+        id: stored.key + "|preset:" + g + "|" + d.path,
+        kind: "preset", presetGuid: g, path: d.path,
+        field: presetName(mine.get(g)) + " · " + d.path,
+        category: "preset values",
+        severity: HIGH_PRESET_FIELDS.has(d.path.split(".").pop()) ? SEV_HIGH : SEV_LOW,
+        stored: d.stored, incoming: d.incoming,
+        storedKey: stored.key, storedLibrary: stored.library_id,
+        incomingLibrary: incomingLibraryId, guid: incoming.guid
+      });
+    }
+  }
+  return out;
+}
+
+function lastModified(rec) {
+  const v = obj(rec && rec.raw).last_modified;
+  return looksNumeric(v) ? Number(v) : null;
+}
+
+/* The newer record is the default, never the automatic answer. */
+function newerSide(stored, incomingRec) {
+  const a = lastModified(stored), b = lastModified(incomingRec);
+  if (a === null || b === null || a === b) return null;
+  return b > a ? "incoming" : "stored";
+}
+
+function detectConflicts(records, libraryId) {
+  const out = [];
+  for (const { rec } of records) {
+    for (const other of libRecords()) {
+      if (other.guid !== rec.guid || other.library_id === libraryId) continue;
+      const found = compareRecords(other, rec, libraryId);
+      if (!found.length) continue;
+      const dflt = newerSide(other, rec);
+      for (const c of found) {
+        c.defaultChoice = dflt || "both";
+        c.defaultReason = dflt
+          ? (dflt === "incoming" ? "incoming library was modified more recently"
+                                 : "stored library was modified more recently")
+          : "no last_modified to compare — keeping both until somebody says otherwise";
+        c.storedModified = lastModified(other);
+        c.incomingModified = lastModified(rec);
+        c.choice = c.defaultChoice;
+      }
+      out.push(...found);
+    }
+  }
+  out.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity] ||
+    a.category.localeCompare(b.category) || a.field.localeCompare(b.field));
+  return out;
+}
+
+/* ---- Resolutions live outside raw ---------------------------------------
+   raw stays the verbatim import copy; a resolution is an override applied on
+   top of it for display and for export. The rejected value is written to the
+   record's history, never destroyed. */
+
+function setPath(target, path, value) {
+  const parts = path.split(".");
+  let node = target;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (!isPlainObject(node[parts[i]])) node[parts[i]] = {};
+    node = node[parts[i]];
+  }
+  node[parts[parts.length - 1]] = value;
+}
+
+function resolvedRaw(rec) {
+  const raw = obj(rec && rec.raw);
+  const res = obj(rec && rec.resolved);
+  const keys = Object.keys(res);
+  if (!keys.length) return raw;             // the common case, no clone
+  const copy = deepCopy(raw);
+  for (const path of keys) setPath(copy, path, res[path].value);
+  return copy;
+}
+
+function resolvedPresetRaw(rec, entry) {
+  const res = obj(rec && rec.presetResolved);
+  const byGuid = entry.guid ? res[entry.guid] : null;
+  if (!byGuid) return entry.raw;
+  const copy = deepCopy(obj(entry.raw));
+  for (const [path, r] of Object.entries(byGuid)) setPath(copy, path, r.value);
+  return copy;
+}
+
 /* ---- Diff against what is already in library.json ---- */
 
 const DIFF_PATH_CAP = 200;
@@ -4133,8 +4440,173 @@ function diffLibrary(parsed, libraryId) {
     stale.push({ key, existing });
   }
 
-  return { create, update, skip, stale, suspects, unchanged,
-           skipped: skip.length, flagged, seen, libraryId, now };
+  // Cross-library disagreements about the same guid. Detected against the
+  // records already stored under other libraries, not against this file.
+  const conflicts = detectConflicts([...create, ...update], libraryId);
+  const unresolvedHigh = conflicts.filter(c => c.severity === SEV_HIGH).length;
+
+  return { create, update, skip, stale, suspects, unchanged, conflicts,
+           unresolvedHigh, skipped: skip.length, flagged, seen, libraryId, now };
+}
+
+
+/* ---- Conflict resolution ------------------------------------------------
+   High conflicts block the import: a flute count that is 4 in one library and
+   1 in the other will silently wreck every feed derived from it, and there is
+   no safe default for that. Medium and Low carry a default and can be
+   deferred. Every resolution is recorded with who, when, and what was
+   rejected; the rejected value goes to the record's history so a bad call is
+   reversible. */
+
+const SEV_LABEL = { high: "High — changes the cut",
+                    medium: "Medium — affects reach and simulation",
+                    low: "Low — labels and metadata" };
+
+function conflictCounts(list) {
+  const n = { high: 0, medium: 0, low: 0 };
+  for (const c of list) if (c.choice === undefined || c.choice !== "resolved") n[c.severity]++;
+  return n;
+}
+
+function unresolvedHighCount(d) {
+  return d.conflicts.filter(c => c.severity === SEV_HIGH && !c.settled).length;
+}
+
+function renderConflictSection(host, d) {
+  if (!d.conflicts.length) return;
+  const high = unresolvedHighCount(d);
+  const card = el("div", "recon-card conflict-card");
+  card.appendChild(el("div", "recon-title",
+    d.conflicts.length + " cross-library conflict" +
+    (d.conflicts.length === 1 ? "" : "s")));
+  const byCat = {};
+  for (const c of d.conflicts) byCat[c.category] = (byCat[c.category] || 0) + 1;
+  card.appendChild(el("div", "recon-sub",
+    Object.entries(byCat).map(([k, v]) => v + " " + k).join(" · ")));
+
+  if (high) {
+    const warn = el("div", "recon-note blocked");
+    warn.appendChild(el("div", null, high + " High conflict" + (high === 1 ? "" : "s") +
+      " must be answered before this import can complete — these change the cut."));
+    card.appendChild(warn);
+  }
+
+  const bulk = el("div", "recon-actions");
+  const rule = (label, fn) => {
+    const b = el("button", "btn-ghost", label);
+    b.type = "button";
+    b.addEventListener("click", () => {
+      for (const c of d.conflicts) if (fn(c)) { c.choice = fn(c); c.settled = true; }
+      renderImportPreview();
+    });
+    bulk.appendChild(b);
+  };
+  rule("Take newer for all Low", c =>
+    c.severity === SEV_LOW && c.defaultChoice !== "both" ? c.defaultChoice : null);
+  rule("Take incoming for all descriptions", c =>
+    c.path === "description" ? "incoming" : null);
+  rule("Take newer for all Medium", c =>
+    c.severity === SEV_MED && c.defaultChoice !== "both" ? c.defaultChoice : null);
+  card.appendChild(bulk);
+
+  const list = el("div", "change-list tall");
+  for (const c of d.conflicts) {
+    const row = el("div", "conflict-row sev-" + c.severity + (c.settled ? " settled" : ""));
+    const head = el("div", "conflict-head");
+    head.appendChild(el("span", "sev-tag " + c.severity, c.severity));
+    head.appendChild(el("span", "conflict-field", c.field));
+    head.appendChild(el("span", "conflict-tool", libDesc(store.library[c.storedKey] || {})));
+    row.appendChild(head);
+
+    const sides = el("div", "conflict-sides");
+    const mkSide = (which, label, value, modified) => {
+      const b = el("button", "cmp-side" + (c.choice === which ? " on" : ""));
+      b.type = "button";
+      b.innerHTML = '<span class="cmp-tag">' + esc(label) +
+        (modified ? " · " + esc(new Date(modified).toISOString().slice(0, 10)) : "") +
+        "</span>" + esc(shortVal(value));
+      b.addEventListener("click", () => {
+        c.choice = which; c.settled = true; renderImportPreview();
+      });
+      return b;
+    };
+    sides.appendChild(mkSide("stored", c.storedLibrary + " (stored)", c.stored, c.storedModified));
+    sides.appendChild(mkSide("incoming", c.incomingLibrary + " (incoming)", c.incoming, c.incomingModified));
+    const both = el("button", "cmp-side" + (c.choice === "both" ? " on" : ""));
+    both.type = "button";
+    both.innerHTML = '<span class="cmp-tag">keep both</span>each library keeps its own value';
+    both.addEventListener("click", () => { c.choice = "both"; c.settled = true; renderImportPreview(); });
+    sides.appendChild(both);
+    row.appendChild(sides);
+    row.appendChild(el("div", "recon-sub",
+      (c.settled ? "answered: " : "default: ") + c.choice + " — " + c.defaultReason));
+    list.appendChild(row);
+  }
+  card.appendChild(list);
+  host.appendChild(card);
+}
+
+/* Applies the answers onto the records. Nothing touches raw: a resolution is
+   an override plus a history entry naming what was rejected. */
+function applyResolutions(d, by, now) {
+  const touched = new Map();          // key -> record
+  const take = (key, mutate) => {
+    let rec = touched.get(key) || store.library[key];
+    if (!rec) return;
+    rec = { ...rec, resolved: { ...obj(rec.resolved) },
+            presetResolved: deepCopy(obj(rec.presetResolved)),
+            conflict_history: [...(rec.conflict_history || [])] };
+    mutate(rec);
+    touched.set(key, rec);
+  };
+
+  for (const c of d.conflicts) {
+    if (!c.settled || c.choice === "both") continue;
+    const value = c.choice === "incoming" ? c.incoming : c.stored;
+    const rejected = c.choice === "incoming" ? c.stored : c.incoming;
+    const entry = { at: now, by, path: c.path, kind: c.kind,
+                    chose: c.choice, value, rejected,
+                    from: c.choice === "incoming" ? c.incomingLibrary : c.storedLibrary,
+                    against: c.choice === "incoming" ? c.storedLibrary : c.incomingLibrary,
+                    severity: c.severity, preset_guid: c.presetGuid || null };
+    // The stored record is the one that exists now; the incoming record is
+    // written by this same import, so both sides land on the stored key and
+    // the incoming record picks the value up through its own patch below.
+    take(c.storedKey, rec => {
+      if (c.kind === "preset") {
+        const g = c.presetGuid;
+        rec.presetResolved[g] = { ...obj(rec.presetResolved[g]),
+                                  [c.path]: { value, by, at: now } };
+      } else {
+        rec.resolved[c.path] = { value, by, at: now, chose: c.choice };
+      }
+      rec.conflict_history.push(entry);
+    });
+    c.appliedValue = value;
+  }
+  return touched;
+}
+
+/* The value an incoming record should carry once the answers are in. */
+function resolutionsForIncoming(d, key) {
+  const out = { resolved: {}, presetResolved: {}, history: [] };
+  for (const c of d.conflicts) {
+    if (!c.settled || c.choice === "both") continue;
+    if (c.guid === undefined) continue;
+    const rec = store.library[c.storedKey];
+    if (!rec || rec.guid !== guidOfKey(key)) continue;
+    const value = c.choice === "incoming" ? c.incoming : c.stored;
+    if (c.kind === "preset") {
+      out.presetResolved[c.presetGuid] = { ...obj(out.presetResolved[c.presetGuid]),
+        [c.path]: { value, by: authName(), at: d.now } };
+    } else {
+      out.resolved[c.path] = { value, by: authName(), at: d.now, chose: c.choice };
+    }
+    out.history.push({ at: d.now, by: authName(), path: c.path, kind: c.kind,
+      chose: c.choice, value, rejected: c.choice === "incoming" ? c.stored : c.incoming,
+      severity: c.severity, preset_guid: c.presetGuid || null });
+  }
+  return out;
 }
 
 /* ---- Preview + confirm ---- */
@@ -4356,8 +4828,11 @@ function renderImportPreview() {
   }
   host.appendChild(list);
 
+  renderConflictSection(host, d);
+
   const writes = d.create.length + d.update.length + d.stale.length;
-  const blocked = d.suspects.length > 0;
+  const highLeft = unresolvedHighCount(d);
+  const blocked = d.suspects.length > 0 || highLeft > 0;
   if (blocked) {
     const warn = el("div", "recon-note blocked");
     warn.appendChild(el("div", null,
@@ -4373,7 +4848,9 @@ function renderImportPreview() {
   const confirm = document.createElement("button");
   confirm.type = "button";
   confirm.className = "btn-small";
-  confirm.textContent = blocked ? "Import blocked" : "Import " + (writes || "nothing");
+  confirm.textContent = highLeft
+    ? "Answer " + highLeft + " High conflict" + (highLeft === 1 ? "" : "s") + " first"
+    : blocked ? "Import blocked" : "Import " + (writes || "nothing");
   confirm.disabled = writes === 0 || blocked;
   if (confirm.disabled) confirm.style.opacity = "0.5";
   confirm.addEventListener("click", commitImport);
@@ -4439,7 +4916,8 @@ function commitImport() {
   const d = importState.diff;
   const file = importState.file;
   if (!d || !file) return;
-  if (d.suspects.length) return;   // the preview blocks it; never write it
+  if (d.suspects.length) return;         // the preview blocks it; never write it
+  if (unresolvedHighCount(d)) return;    // a High conflict has no safe default
   if (!requireIdentity(commitImport)) return;
 
   const now = d.now;
@@ -4451,10 +4929,17 @@ function commitImport() {
   };
   const patch = {};
 
+  // Answers land on the already-stored records first, then ride onto the
+  // incoming ones below, so both libraries end up carrying the decision.
+  for (const [key, rec] of applyResolutions(d, by, now)) patch[key] = rec;
+
   for (const { key, rec, merge } of d.create) {
+    const r = resolutionsForIncoming(d, key);
     patch[key] = {
       key, library_id: d.libraryId, guid: rec.guid, raw: rec.raw,
       presets: stampPresetAuthor(merge.presets, by),
+      resolved: r.resolved, presetResolved: r.presetResolved,
+      conflict_history: r.history,
       source: "fusion", archived: false,
       link_state: "unlinked", crib_item_id: null,
       stale_in_library: false, first_seen: now, ...stamp
@@ -4465,9 +4950,13 @@ function commitImport() {
     // the app hung on the record ride through untouched — a re-import that
     // pushed answered records back into the queue would make the reconcile
     // screen something to avoid.
+    const r = resolutionsForIncoming(d, key);
     patch[key] = {
       ...existing, key, library_id: d.libraryId, guid: rec.guid, raw: rec.raw,
       presets: stampPresetAuthor(merge.presets, by),
+      resolved: { ...obj(existing.resolved), ...r.resolved },
+      presetResolved: { ...obj(existing.presetResolved), ...r.presetResolved },
+      conflict_history: [...(existing.conflict_history || []), ...r.history],
       source: "fusion",
       link_state: existing.link_state || "unlinked",
       stale_in_library: false, stale_since: null, ...stamp
@@ -5842,7 +6331,7 @@ function renderFusionSection(item) {
 
 const inspector = { open: false, stored: null, incoming: null, libraryId: "" };
 
-function deepCopy(v) { try { return JSON.parse(JSON.stringify(v)); } catch { return v; } }
+
 
 /* Runs the real merge on copies, so the outcomes shown are the outcomes that
    would happen — not a second implementation that could disagree with it. */
@@ -5941,6 +6430,13 @@ function renderLibInspector() {
   head.appendChild(h2);
   const ro = el("span", "badge ro", "read-only");
   head.appendChild(ro);
+  if (stored) {
+    const ex = el("button", "btn-ghost", "Export for Fusion");
+    ex.type = "button";
+    ex.title = "One-tool .tools file, guids preserved";
+    ex.addEventListener("click", () => exportOneRecord(stored));
+    head.appendChild(ex);
+  }
   const close = el("button", "drawer-close", "×");
   close.type = "button";
   close.title = "Close (Esc)";
@@ -6045,6 +6541,521 @@ function renderLibInspector() {
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && inspector.open) closeLibInspector();
 });
+
+
+/* ================= Export to Fusion (Part B3/B4) ========================
+   Produces a .tools file Fusion will actually read. The file is always new
+   and timestamped; the app never touches the originals and never overwrites
+   anything in place. The operator re-imports it to Fusion himself.
+
+   Guids are preserved exactly, because that is what makes Fusion UPDATE the
+   matching tool instead of duplicating it — the whole point of the loop. */
+
+const exportState = { scope: "all", newGuids: false, renumber: false,
+                      records: null, result: null, busy: false };
+
+function exportRecords() {
+  if (Array.isArray(exportState.records)) return exportState.records;
+  const all = libRecords().filter(r => !r.archived);
+  if (exportState.scope === "filtered") return all.filter(libMatches);
+  return all;
+}
+
+/* ---- Merging for export -------------------------------------------------
+   A guid may be stored once per library. A .tools file may carry it once.
+   So "the whole merged library" is one record per guid: the newest record as
+   the base, every library's presets unioned onto it by preset key, and the
+   resolved conflict values applied. Emitting the raw per-library records
+   instead would hand Fusion a file with duplicate guids, which is exactly
+   what the uniqueness check blocks. */
+function mergeForExport(records) {
+  const byGuid = new Map();
+  for (const rec of records) {
+    if (!byGuid.has(rec.guid)) byGuid.set(rec.guid, []);
+    byGuid.get(rec.guid).push(rec);
+  }
+  const out = [], notes = [];
+  for (const [guid, group] of byGuid) {
+    if (group.length === 1) { out.push(group[0]); continue; }
+    // Newest wins as the base; ties fall to the first, deterministically.
+    const sorted = [...group].sort((a, b) => (lastModified(b) ?? -1) - (lastModified(a) ?? -1));
+    const base = sorted[0];
+    const presets = [];
+    const seen = new Set();
+    for (const rec of sorted) {
+      for (const e of (Array.isArray(rec.presets) ? rec.presets : [])) {
+        if (seen.has(e.key)) continue;
+        seen.add(e.key);
+        presets.push(e);
+      }
+    }
+    // Resolutions from every library in the group, base last so an explicit
+    // answer on the base is the one that stands.
+    let resolved = {}, presetResolved = {};
+    for (const rec of [...sorted].reverse()) {
+      resolved = { ...resolved, ...obj(rec.resolved) };
+      presetResolved = { ...presetResolved, ...obj(rec.presetResolved) };
+    }
+    notes.push({ guid, description: libDesc(base), base: base.library_id,
+                 libraries: group.map(r => r.library_id),
+                 presets: presets.length });
+    out.push({ ...base, presets, resolved, presetResolved,
+               _mergedFrom: group.map(r => r.key) });
+  }
+  return { records: out, notes };
+}
+
+/* Steps 1-5 of the construction: raw, merged presets, resolved values, app
+   keys stripped, wrapped in the stored envelope version. */
+function buildExportFile(records, opts) {
+  opts = opts || {};
+  const data = [];
+  records = mergeForExport(records).records;
+  let t = 0;
+  for (const rec of records) {
+    // rawForExport already strips _-prefixed keys, including the _mergedFrom
+    // marker mergeForExport hangs on the record.
+    const tool = rawForExport(rec);          // raw + resolutions + merged presets
+    if (opts.newGuids) {
+      tool.guid = crypto.randomUUID();
+      const sv = obj(tool["start-values"]);
+      if (Array.isArray(sv.presets)) {
+        tool["start-values"] = { ...sv,
+          presets: sv.presets.map(p => ({ ...p, guid: crypto.randomUUID() })) };
+      }
+    }
+    if (opts.renumber) {
+      tool["post-process"] = { ...obj(tool["post-process"]), number: ++t };
+    }
+    data.push(tool);
+  }
+  // The envelope version is whatever the source libraries declared, not a
+  // number this app invented.
+  const versions = [...new Set(records.map(r => r.import_version)
+    .filter(v => v !== null && v !== undefined))];
+  return { version: versions.length === 1 ? versions[0] : (versions[0] ?? null), data };
+}
+
+/* ---- Validation: the app checks itself, because Fusion will not tell you
+   anything useful and nobody is going to open the JSON. ------------------- */
+
+/* Every key that has ever arrived in an imported library. Anything in the
+   output that is not in here is something this app invented. */
+function knownRawKeys() {
+  const keys = new Set();
+  const walk = (v, prefix) => {
+    if (Array.isArray(v)) { for (const x of v) walk(x, prefix); return; }
+    if (!isPlainObject(v)) return;
+    for (const k of Object.keys(v)) {
+      keys.add(prefix ? prefix + "." + k : k);
+      walk(v[k], prefix ? prefix + "." + k : k);
+    }
+  };
+  for (const rec of libRecords()) walk(obj(rec.raw), "");
+  return keys;
+}
+
+function scanKeys(v, prefix, hits) {
+  if (Array.isArray(v)) { for (const x of v) scanKeys(x, prefix, hits); return hits; }
+  if (!isPlainObject(v)) return hits;
+  for (const k of Object.keys(v)) {
+    const path = prefix ? prefix + "." + k : k;
+    hits.push(path);
+    scanKeys(v[k], path, hits);
+  }
+  return hits;
+}
+
+function validateExport(file, records) {
+  const errors = [], warnings = [];
+
+  // 2. Schema sanity.
+  file.data.forEach((tool, i) => {
+    const who = obj(tool).description || obj(tool).guid || "record " + (i + 1);
+    if (!obj(tool).guid) errors.push(who + ": no guid");
+    if (!obj(tool).type) errors.push(who + ": no type");
+    if (!obj(tool).unit) errors.push(who + ": no unit");
+    const sv = obj(obj(tool)["start-values"]);
+    if (!Array.isArray(sv.presets)) errors.push(who + ": no start-values.presets array");
+    else sv.presets.forEach((p, j) => {
+      if (!obj(p).guid) errors.push(who + ": preset " + (j + 1) + " has no guid");
+      if (!obj(p).name) errors.push(who + ": preset " + (j + 1) + " has no name");
+    });
+  });
+
+  // Guid uniqueness within the file.
+  const seen = new Map();
+  for (const tool of file.data) {
+    const g = obj(tool).guid;
+    if (!g) continue;
+    if (seen.has(g)) {
+      errors.push("duplicate guid " + g + " on “" + seen.get(g) + "” and “" +
+        (tool.description || "?") + "”");
+    } else seen.set(g, tool.description || "?");
+  }
+
+  // 3. No app keys, and nothing Fusion has never sent us.
+  const known = knownRawKeys();
+  const paths = scanKeys(file.data, "", []);
+  const appKeys = new Set(), unknown = new Set();
+  for (const path of paths) {
+    const last = path.split(".").pop();
+    if (last.startsWith("_")) appKeys.add(path);
+    else if (!known.has(path)) unknown.add(path);
+  }
+  for (const k of appKeys) errors.push("app-only key in output: " + k);
+  for (const k of unknown) warnings.push("key not seen in any imported library: " + k);
+
+  return { errors, warnings };
+}
+
+/* 1. Round-trip self-test: zip it, read it back with the app's own importer,
+   deep-compare against what was intended. This is the only check that proves
+   the file we are about to hand over is the file we meant. */
+async function roundTripCheck(bytes, intended) {
+  const file = new File([bytes], "roundtrip.tools");
+  let parsed;
+  try { parsed = await readToolsFile(file); }
+  catch (e) { return ["the exported file could not be read back: " + e.message]; }
+  const problems = [];
+  if (parsed.version !== intended.version) {
+    problems.push("version changed: " + intended.version + " -> " + parsed.version);
+  }
+  if (parsed.data.length !== intended.data.length) {
+    problems.push("tool count changed: " + intended.data.length + " -> " + parsed.data.length);
+  }
+  const byGuid = new Map(parsed.data.map(t => [obj(t).guid, t]));
+  for (const want of intended.data) {
+    const got = byGuid.get(obj(want).guid);
+    if (!got) { problems.push("missing after round trip: " + (want.description || want.guid)); continue; }
+    if (stableStringify(want) !== stableStringify(got)) {
+      const diffs = diffRawPaths(want, got).slice(0, 3)
+        .map(d => d.path + " " + shortVal(d.from) + " -> " + shortVal(d.to));
+      problems.push((want.description || want.guid) + " changed: " + diffs.join(", "));
+    }
+  }
+  return problems;
+}
+
+function exportFileName(label) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  return (label || "tool_crib") + "_" + stamp + ".tools";
+}
+
+async function zipToolsFile(file) {
+  const fflate = await loadFflate();
+  const text = JSON.stringify(file, null, 2) + "\n";
+  // A single entry named exactly tools.json, deflated. Fusion reads nothing else.
+  return fflate.zipSync({ "tools.json": fflate.strToU8(text) }, { level: 6 });
+}
+
+function downloadBytes(bytes, name) {
+  const blob = new Blob([bytes], { type: "application/zip" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+async function runExport(records, opts, label) {
+  opts = opts || {};
+  const merged = mergeForExport(records);
+  const file = buildExportFile(records, opts);
+  const result = { label, count: file.data.length, file, blocked: [], warnings: [] };
+
+  const v = validateExport(file, records);
+  result.blocked.push(...v.errors);
+  result.warnings.push(...v.warnings);
+
+  let bytes = null;
+  if (!result.blocked.length) {
+    try { bytes = await zipToolsFile(file); }
+    catch (e) {
+      result.blocked.push("could not build the zip: " + e.message +
+        " (the unzip library is also what writes it — no internet?)");
+    }
+  }
+  if (bytes && !result.blocked.length) {
+    result.blocked.push(...await roundTripCheck(bytes, file));
+  }
+  if (result.blocked.length) return result;
+
+  result.name = exportFileName(label);
+  result.presets = file.data.reduce((n, t) =>
+    n + (obj(obj(t)["start-values"]).presets || []).length, 0);
+  result.libraries = [...new Set(records.map(r => r.library_id))];
+  result.merges = merged.notes;
+  result.resolutions = records.flatMap(r => (r.conflict_history || [])
+    .map(h => ({ tool: libDesc(r), path: h.path, chose: h.chose,
+                 from: h.from, rejected: shortVal(h.rejected) })));
+  result.bytes = bytes;
+  downloadBytes(bytes, result.name);
+  writeExportLog(result);
+  return result;
+}
+
+/* 4. The manifest, kept in the data repo. What went out, when, from where,
+   and which conflicts were answered how. */
+function writeExportLog(result) {
+  const entry = {
+    ts: new Date().toISOString(), by: authName(), file: result.name,
+    tools: result.count, presets: result.presets,
+    libraries: result.libraries, version: result.file.version,
+    new_guids: !!exportState.newGuids, renumbered: !!exportState.renumber,
+    resolutions: result.resolutions,
+    merged_guids: result.merges,
+    tool_guids: result.file.data.map(t => obj(t).guid)
+  };
+  const path = "exports/" + entry.ts.slice(0, 7) + "/" +
+    result.name.replace(/\.tools$/, "") + ".json";
+  store.exportLog[path] = entry;
+  enqueueOp(path, "export-log", null, "export " + result.count + " tools → " + result.name);
+}
+
+
+/* ---- Export screen ---- */
+
+function renderExport() {
+  const host = document.getElementById("export-body");
+  if (!host) return;
+  host.textContent = "";
+  const all = libRecords().filter(r => !r.archived);
+  if (!all.length) {
+    host.appendChild(el("div", "empty-state", "Import a Fusion library first."));
+    return;
+  }
+
+  const card = el("div", "recon-card");
+  card.appendChild(el("div", "recon-title", "What goes in the file"));
+  const chips = el("div", "chip-row");
+  // Counts are of TOOLS in the resulting file, not of stored library records:
+  // a guid held by three libraries is one tool in the export.
+  const nTools = list => mergeForExport(list).records.length;
+  const scopes = [
+    ["all", "Whole merged library (" + nTools(all) + ")"],
+    ["filtered", "Current Reconcile search (" + nTools(all.filter(libMatches)) + ")"],
+    ["selection", "Crib selection (" + nTools(selectedCribRecords()) + ")"]
+  ];
+  for (const [key, label] of scopes) {
+    const b = el("button", "chip" + (exportState.scope === key ? " on" : ""), label);
+    b.type = "button";
+    b.addEventListener("click", () => {
+      exportState.scope = key;
+      exportState.records = key === "selection" ? selectedCribRecords() : null;
+      renderExport();
+    });
+    chips.appendChild(b);
+  }
+  card.appendChild(chips);
+
+  const opts = el("div", "export-opts");
+  const toggle = (key, label, note) => {
+    const lbl = document.createElement("label");
+    lbl.className = "check-field";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = !!exportState[key];
+    cb.addEventListener("change", () => { exportState[key] = cb.checked; renderExport(); });
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(" " + label));
+    opts.appendChild(lbl);
+    opts.appendChild(el("div", "panel-hint", note));
+  };
+  toggle("newGuids", "New guids",
+    "Off is what you want. Keeping the guids is what makes Fusion UPDATE each " +
+    "matching tool on import. Turn this on only to deliberately branch a " +
+    "library — every tool will arrive in Fusion as a brand new one, alongside " +
+    "the originals.");
+  toggle("renumber", "Renumber T numbers sequentially",
+    "Off by default. A real library already has ten tools sharing number 0, " +
+    "so Fusion clearly tolerates it, and renumbering would fight whatever the " +
+    "post expects.");
+  card.appendChild(opts);
+
+  const recs = exportRecords();
+  const n = nTools(recs);
+  const acts = el("div", "recon-actions");
+  const go = el("button", "btn-small", "Export " + n + " tool" + (n === 1 ? "" : "s"));
+  go.type = "button";
+  go.disabled = !n || exportState.busy;
+  if (go.disabled) go.style.opacity = "0.5";
+  go.addEventListener("click", async () => {
+    exportState.busy = true; renderExport();
+    try {
+      exportState.result = await runExport(recs, exportState, "tool_crib");
+    } catch (e) {
+      // A throw in here would otherwise vanish and leave the button inert.
+      exportState.result = { blocked: ["export failed: " + (e && e.message || e)],
+                             warnings: [], count: 0 };
+    }
+    exportState.busy = false;
+    renderExport();
+  });
+  acts.appendChild(go);
+  if (exportState.busy) acts.appendChild(el("div", "panel-hint", "Checking the file…"));
+  card.appendChild(acts);
+  host.appendChild(card);
+
+  if (exportState.result) renderExportResult(host, exportState.result);
+  renderRoundTripPanel(host);
+}
+
+function renderExportResult(host, r) {
+  const card = el("div", "recon-card");
+  if (r.blocked.length) {
+    card.appendChild(el("div", "recon-title", "Export blocked — nothing downloaded"));
+    const warn = el("div", "recon-note blocked");
+    warn.appendChild(el("div", null,
+      "The file did not survive its own checks, so it was not handed over. " +
+      "A file Fusion rejects is worse than no file."));
+    card.appendChild(warn);
+    const list = el("div", "change-list");
+    for (const e of r.blocked.slice(0, 40)) list.appendChild(el("div", "change-more", e));
+    if (r.blocked.length > 40) {
+      list.appendChild(el("div", "change-more", "+ " + (r.blocked.length - 40) + " more"));
+    }
+    card.appendChild(list);
+    host.appendChild(card);
+    return;
+  }
+  card.appendChild(el("div", "recon-title", "Exported " + r.name));
+  const stats = el("div", "stat-row");
+  const cell = (n, k) => {
+    const c = el("div", "stat");
+    c.innerHTML = `<div class="n">${esc(n)}</div><div class="k">${esc(k)}</div>`;
+    stats.appendChild(c);
+  };
+  cell(r.count, "tools");
+  cell(r.presets, "presets");
+  cell(r.libraries.length, "source libraries");
+  cell(r.resolutions.length, "conflicts resolved");
+  card.appendChild(stats);
+  card.appendChild(el("div", "recon-sub", "from " + r.libraries.join(", ") +
+    " · envelope version " + r.file.version +
+    " · round-trip checked, guids preserved"));
+  if (r.merges && r.merges.length) {
+    card.appendChild(el("div", "recon-sub", r.merges.length +
+      " guid" + (r.merges.length === 1 ? "" : "s") +
+      " held by more than one library were merged into one record each, " +
+      "presets unioned: " + r.merges.slice(0, 4)
+        .map(m => m.description + " (" + m.libraries.join("+") + ")").join(", ")));
+  }
+  if (r.warnings.length) {
+    card.appendChild(el("div", "recon-sub", r.warnings.length +
+      " advisory: " + r.warnings.slice(0, 3).join(" · ")));
+  }
+  if (r.resolutions.length) {
+    const list = el("div", "change-list");
+    for (const x of r.resolutions.slice(0, 40)) {
+      list.appendChild(el("div", "change-more",
+        x.tool + " · " + x.path + " → took " + x.chose + " (" + x.from +
+        "), rejected " + x.rejected));
+    }
+    card.appendChild(list);
+  }
+  card.appendChild(el("div", "panel-hint",
+    "A manifest of this export is queued to the data repo. The original " +
+    ".tools files were not touched — re-import this file into Fusion yourself."));
+  host.appendChild(card);
+}
+
+/* ---- B5: the one test that proves the round trip ---- */
+
+function renderRoundTripPanel(host) {
+  const card = el("div", "recon-card");
+  card.appendChild(el("div", "recon-title", "Round-trip self-test (dev)"));
+  card.appendChild(el("div", "recon-sub",
+    "Exports the whole library, re-imports the result through the app's own " +
+    "importer, and reports any drift. Zero drift is the pass condition. Run " +
+    "it after any change to import or export code — nothing else actually " +
+    "proves the loop."));
+  const acts = el("div", "recon-actions");
+  const b = el("button", "btn-ghost", "Run round-trip test");
+  b.type = "button";
+  b.addEventListener("click", async () => {
+    const out = document.getElementById("roundtrip-out");
+    out.textContent = "Running…";
+    const res = await roundTripSelfTest();
+    out.textContent = "";
+    out.appendChild(el("div", res.pass ? "rt-pass" : "rt-fail",
+      res.pass ? "PASS — " + res.tools + " tools, " + res.presets +
+                 " presets, zero drift"
+               : "FAIL — " + res.problems.length + " difference" +
+                 (res.problems.length === 1 ? "" : "s")));
+    for (const pb of res.problems.slice(0, 30)) {
+      out.appendChild(el("div", "change-more", pb));
+    }
+  });
+  acts.appendChild(b);
+  card.appendChild(acts);
+  card.appendChild(el("div", null, "")).id = "roundtrip-out";
+  host.appendChild(card);
+}
+
+async function roundTripSelfTest() {
+  const records = libRecords().filter(r => !r.archived);
+  const intended = buildExportFile(records, {});
+  const problems = [];
+  let bytes;
+  try { bytes = await zipToolsFile(intended); }
+  catch (e) { return { pass: false, problems: ["could not build the zip: " + e.message] }; }
+  problems.push(...await roundTripCheck(bytes, intended));
+
+  // Beyond byte equality: the re-imported records must normalize to the same
+  // preset entries the store holds, or the loop is lossy somewhere else.
+  try {
+    const parsed = await readToolsFile(new File([bytes], "rt.tools"));
+    const byGuid = new Map(parsed.data.map(t => [obj(t).guid, t]));
+    for (const rec of records) {
+      const got = byGuid.get(rec.guid);
+      if (!got) { problems.push("missing on re-import: " + libDesc(rec)); continue; }
+      const want = (rec.presets || []).length;
+      const have = rawPresets(got).length;
+      if (want !== have) {
+        problems.push(libDesc(rec) + ": " + want + " presets exported, " +
+          have + " came back");
+      }
+    }
+  } catch (e) { problems.push("re-import failed: " + e.message); }
+
+  return { pass: problems.length === 0, problems,
+           tools: intended.data.length,
+           presets: intended.data.reduce((n, t) =>
+             n + (obj(obj(t)["start-values"]).presets || []).length, 0) };
+}
+
+/* ---- Single-tool export, from any detail view ---- */
+
+async function exportOneRecord(rec) {
+  const r = await runExport([rec], { newGuids: false, renumber: false },
+    "tool_" + (deriveLib(rec).description || rec.guid).replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 40));
+  if (r.blocked.length) {
+    alertReconcile("Export blocked: " + r.blocked.slice(0, 3).join(" · "));
+  }
+  return r;
+}
+
+async function exportCribItem(item) {
+  const recs = recordsForItem(item.id);
+  if (!recs.length) return;
+  const r = await runExport(recs, { newGuids: false, renumber: false },
+    "tool_" + item.id);
+  if (r.blocked.length) alertReconcile("Export blocked: " + r.blocked.slice(0, 3).join(" · "));
+  return r;
+}
+
+/* Crib-table selection, used as an export scope. */
+const cribSelection = new Set();
+
+function selectedCribRecords() {
+  const out = [];
+  for (const id of cribSelection) out.push(...recordsForItem(id));
+  return out;
+}
 
 /* ---- Boot ---- */
 

@@ -127,14 +127,24 @@ one value.
 values differ between libraries already renders as a flagged conflict row in
 the crib drawer.
 
-**Status: FAIL — expected, until Part B.**
+**Status: PASS** (Part B).
 
-Both values are stored and neither is silently taken: they are two records
-under two composite keys, `SHOP_TOOLS::…` with `NOF 4` and `SHOP_TOOLS_1::…`
-with `NOF 1`, and each keeps its own `raw`. What is missing is the surfacing.
-Phase 2.5 raises conflicts for **presets** (`aggregatePresets` flags a preset
-key whose values differ across libraries) but nothing compares **geometry**
-across the records linked to one crib item, so the flute-count disagreement is
-recorded and never shown.
+Importing `SHOP_TOOLS_1` over a store holding `SHOP_TOOLS` raises
+`.25" long ball · geometry.NOF · 4 vs 1` as a **High** conflict, and the
+import will not complete until it is answered — the confirm button reads
+*Answer 1 High conflict first*. Both values remain stored under their own
+composite keys with their own `raw`; the answer is written as an override plus
+a history entry naming the rejected value.
 
-Part B is what closes this.
+Assert this on the conflicts the import **raises**, not on the records
+afterwards: once the conflict is answered the two records agree, which is the
+whole point of answering it.
+
+### Note on checks 1–3 after Part B
+
+Check 2's procedure now includes answering the High conflicts the second
+import raises. That is Part B working, not a regression — an import that
+silently took one side of a flute-count disagreement is the thing Part B
+exists to prevent. The assertions themselves are unchanged: 137 new, nothing
+archived, `SHOP_TOOLS`'s presets intact, and no `raw` modified (a resolution
+is an override stored beside `raw`, never a write into it).
