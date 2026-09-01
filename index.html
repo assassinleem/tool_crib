@@ -3785,8 +3785,11 @@ function rawForExport(rec) {
   const raw = rec && isPlainObject(rec.raw) ? resolvedRaw(rec) : obj(rec);
   const out = stripAppKeys(raw);
   const presets = Array.isArray(rec && rec.presets) ? rec.presets : null;
-  if (presets && isPlainObject(out["start-values"])) {
-    out["start-values"] = { ...out["start-values"],
+  if (presets && presets.length) {
+    // Create the node when the base record's raw has none, rather than
+    // dropping the merged union on the floor.
+    const sv = isPlainObject(out["start-values"]) ? out["start-values"] : {};
+    out["start-values"] = { ...sv,
       presets: presets.map(p => stripAppKeys(resolvedPresetRaw(rec, p))) };
   }
   return out;
@@ -6982,8 +6985,8 @@ function renderRoundTripPanel(host) {
     const res = await roundTripSelfTest();
     out.textContent = "";
     out.appendChild(el("div", res.pass ? "rt-pass" : "rt-fail",
-      res.pass ? "PASS — " + res.tools + " tools, " + res.presets +
-                 " presets, zero drift"
+      res.pass ? "PASS — " + res.records + " stored records merged to " +
+                 res.tools + " tools, " + res.presets + " presets, zero drift"
                : "FAIL — " + res.problems.length + " difference" +
                  (res.problems.length === 1 ? "" : "s")));
     for (const pb of res.problems.slice(0, 30)) {
@@ -6998,6 +7001,9 @@ function renderRoundTripPanel(host) {
 
 async function roundTripSelfTest() {
   const records = libRecords().filter(r => !r.archived);
+  // The export is per GUID, not per stored record: assertions have to be made
+  // against the merged set the file is actually built from.
+  const merged = mergeForExport(records).records;
   const intended = buildExportFile(records, {});
   const problems = [];
   let bytes;
@@ -7005,27 +7011,76 @@ async function roundTripSelfTest() {
   catch (e) { return { pass: false, problems: ["could not build the zip: " + e.message] }; }
   problems.push(...await roundTripCheck(bytes, intended));
 
-  // Beyond byte equality: the re-imported records must normalize to the same
-  // preset entries the store holds, or the loop is lossy somewhere else.
+  // The export is validated here too. B5 previously only round-tripped, so a
+  // preset with no guid — which validateExport rejects — could sail past the
+  // one test that is supposed to prove the loop.
+  const v = validateExport(intended, records);
+  problems.push(...v.errors);
+
+  /* Per-tool preset counts, three ways, because two different things can go
+     wrong and they need different fixes:
+
+       expected union -> computed straight from the stored per-library
+                         records, WITHOUT going through mergeForExport
+       written        -> what buildExportFile put in the file
+       read back      -> what the importer got out of it again
+
+     The first one is deliberately independent. Deriving the expectation from
+     mergeForExport and then checking a file built by mergeForExport proves
+     nothing about mergeForExport: both sides move together and a union that
+     silently collapsed to one library's array still passes.
+
+     Comparing a PER-LIBRARY record against the merged file is not one of
+     these either. A guid held by two libraries is one tool in the file
+     carrying the union of both preset sets, so that comparison reports a
+     difference for every shared guid, twice, and calls a correct export
+     broken. That is what it was doing. */
+  const expectedUnion = expectedPresetUnion(records);
   try {
     const parsed = await readToolsFile(new File([bytes], "rt.tools"));
-    const byGuid = new Map(parsed.data.map(t => [obj(t).guid, t]));
-    for (const rec of records) {
-      const got = byGuid.get(rec.guid);
-      if (!got) { problems.push("missing on re-import: " + libDesc(rec)); continue; }
-      const want = (rec.presets || []).length;
-      const have = rawPresets(got).length;
-      if (want !== have) {
-        problems.push(libDesc(rec) + ": " + want + " presets exported, " +
-          have + " came back");
+    const readBack = new Map(parsed.data.map(t => [obj(t).guid, t]));
+    const written = new Map(intended.data.map(t => [obj(t).guid, t]));
+    for (const rec of merged) {
+      const w = written.get(rec.guid), r = readBack.get(rec.guid);
+      if (!w) { problems.push("missing from the exported file: " + libDesc(rec)); continue; }
+      if (!r) { problems.push("missing on re-import: " + libDesc(rec)); continue; }
+      const want = expectedUnion.get(rec.guid);
+      const out = rawPresets(w).length, back = rawPresets(r).length;
+      if (want !== undefined && want.size !== out) {
+        problems.push(libDesc(rec) + ": " + want.size +
+          " presets across its libraries, only " + out +
+          " written — the union is not reaching the file");
+      } else if (out !== back) {
+        problems.push(libDesc(rec) + ": " + out + " presets written, " +
+          back + " came back");
+      } else if (want !== undefined) {
+        // Counts can match while the wrong presets went out.
+        const got = new Set(rawPresets(w).map(presetKey));
+        for (const k of want) {
+          if (!got.has(k)) { problems.push(libDesc(rec) + ": preset " + k + " is missing from the file"); break; }
+        }
       }
     }
   } catch (e) { problems.push("re-import failed: " + e.message); }
 
   return { pass: problems.length === 0, problems,
            tools: intended.data.length,
+           records: records.length,
            presets: intended.data.reduce((n, t) =>
              n + (obj(obj(t)["start-values"]).presets || []).length, 0) };
+}
+
+/* The preset keys a guid should end up with, taken straight from the stored
+   per-library records. Independent of the export path on purpose — this is
+   the number the export has to match, not a number the export produced. */
+function expectedPresetUnion(records) {
+  const byGuid = new Map();
+  for (const rec of records) {
+    if (!byGuid.has(rec.guid)) byGuid.set(rec.guid, new Set());
+    const set = byGuid.get(rec.guid);
+    for (const e of (Array.isArray(rec.presets) ? rec.presets : [])) set.add(e.key);
+  }
+  return byGuid;
 }
 
 /* ---- Single-tool export, from any detail view ---- */

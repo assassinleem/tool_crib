@@ -148,3 +148,44 @@ silently took one side of a flute-count disagreement is the thing Part B
 exists to prevent. The assertions themselves are unchanged: 137 new, nothing
 archived, `SHOP_TOOLS`'s presets intact, and no `raw` modified (a resolution
 is an override stored beside `raw`, never a write into it).
+
+---
+
+## Check 5 — round trip over overlapping libraries
+
+The one test that proves the export loop. Run it from **Export → Run
+round-trip test** after any change to import or export code.
+
+**Steps.** With a store holding **two libraries that share guids**, press the
+button. It exports the whole merged library, re-imports the result through the
+app's own importer, and compares.
+
+**Expect.** `PASS — N stored records merged to M tools, P presets, zero
+drift`. Per tool, three numbers must agree:
+
+| | what it is |
+|---|---|
+| union | preset keys across every stored record for that guid, computed straight from the store |
+| written | presets `buildExportFile` put in the file |
+| read back | presets the importer got out of it again |
+
+The union figure is deliberately **not** derived from the export path.
+Computing the expectation with `mergeForExport` and then checking a file built
+by `mergeForExport` proves nothing about it: both sides move together, and a
+union that silently collapsed to one library's array still passes.
+
+Never assert a **per-library record's** preset count against the merged file.
+A guid held by two libraries is one tool in the file carrying the union of
+both preset sets, so that comparison reports a difference for every shared
+guid — twice — and calls a correct export broken. That is the bug this check
+replaced.
+
+**Status: PASS.** 268 stored records across two libraries → 163 tools, 278
+presets, 105 guids held by more than one library, zero tools whose three
+counts disagree. `3/8 HARVI I TE` (5 presets in one library, 2 in the other)
+comes out union 5 / written 5 / read back 5.
+
+**A fixture without overlapping guids does not exercise this.** The suite's
+seven-tool fixture passed while the assertion was wrong. If you change the
+fixtures, keep guids shared across libraries with differing preset sets, and
+run the button against the real files too — that is the only run that counts.
